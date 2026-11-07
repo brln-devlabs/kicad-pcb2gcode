@@ -112,6 +112,10 @@ mein-board/
     cam/                      exportierte Gerber- und Bohrdateien
 ```
 
+Die Dateiendung ist im Reiter **Allgemein** wählbar (`.ngc`, `.nc`, `.gcode`,
+`.tap`, `.cnc`, `.txt`); pcb2gcode schreibt `.ngc`, das Plugin benennt die
+Dateien danach um.
+
 Die Dateien nacheinander im G-Code-Sender (Candle, UGS, bCNC, CNCjs …)
 abarbeiten und dazwischen das Werkzeug wechseln. Der Autoleveller von
 pcb2gcode unterstützt GRBL nicht; nutze stattdessen die Höhenkarte deines

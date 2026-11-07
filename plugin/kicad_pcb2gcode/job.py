@@ -334,7 +334,7 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Dict[str, O
 
 def _job_name(path: str) -> str:
     """"front", "drill", "mask_back" … from a pcb2gcode output file name."""
-    stem = os.path.basename(path)[:-4]
+    stem = os.path.splitext(os.path.basename(path))[0]
     for job in ("mask_front", "mask_back", "npth_drill", "npth_milldrill"):
         if stem.endswith("_" + job):
             return job
@@ -423,9 +423,28 @@ def remove_first_pause(path: str) -> bool:
     return False
 
 
-def clean_outputs(output_dir: str) -> None:
-    """Remove G-code from earlier runs so stale files cannot be mistaken for new ones."""
+def rename_outputs(files: List[str], extension: str) -> List[str]:
+    """Give pcb2gcode's .ngc files the chosen extension."""
+    if extension == "ngc":
+        return files
+    renamed = []
+    for path in files:
+        target = os.path.splitext(path)[0] + "." + extension
+        os.replace(path, target)
+        renamed.append(target)
+    return sorted(renamed)
+
+
+def clean_outputs(output_dir: str, basename: str = "") -> None:
+    """Remove G-code from earlier runs so stale files cannot be mistaken for new ones:
+    every .ngc (what pcb2gcode writes) and this board's files in any other
+    selectable extension."""
+    from .settings import FILE_EXTENSIONS
+
     stale = glob.glob(os.path.join(output_dir, "*.ngc"))
+    if basename:
+        for ext in FILE_EXTENSIONS:
+            stale += glob.glob(os.path.join(output_dir, glob.escape(basename) + "_*." + ext))
     stale += [os.path.join(output_dir, name) for name in ("STEPS.txt", "ABLAUF.txt")]
     for path in stale:
         if not os.path.isfile(path):
@@ -499,7 +518,7 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
             fh.write(render(settings, run_inputs, run_basename))
     millproject_path = os.path.join(req.output_dir, "millproject")
 
-    clean_outputs(req.output_dir)
+    clean_outputs(req.output_dir, basename)
     for config, _, _, _, label in runs:
         if config == "millproject":
             log(tr("Running pcb2gcode ...", "Starte pcb2gcode ..."))
@@ -509,6 +528,7 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
             _run_pcb2gcode(req, [req.pcb2gcode, "--config", config], log)
 
     files = sorted(glob.glob(os.path.join(req.output_dir, "*.ngc")))
+    files = rename_outputs(files, req.settings.general.file_extension)
     if req.settings.machine.skip_first_pause:
         removed = sum(remove_first_pause(path) for path in files)
         if removed:

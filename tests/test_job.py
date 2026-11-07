@@ -454,3 +454,42 @@ def test_remove_first_pause_details(tmp_path):
     empty = tmp_path / "b.ngc"
     empty.write_text("G21\nM2\n")
     assert not remove_first_pause(str(empty))
+
+
+def test_file_extension(board):
+    s = Settings()
+    s.general.file_extension = "nc"
+    result = run_job(request(board, s), lambda line: None)
+    assert result.files and all(f.endswith(".nc") for f in result.files)
+    assert not [f for f in os.listdir(result.output_dir) if f.endswith(".ngc")]
+
+
+def test_switching_extension_removes_old_files_of_this_board_only(board):
+    out = os.path.join(os.path.dirname(board), "gcode")
+    os.makedirs(out)
+    for name in ("my_board_back.gcode", "my_board_drill.tap", "notes.txt", "other_board_back.nc"):
+        open(os.path.join(out, name), "w").close()
+    s = Settings()
+    s.general.file_extension = "txt"
+    result = run_job(request(board, s), lambda line: None)
+    left = set(os.listdir(out))
+    assert "my_board_back.gcode" not in left and "my_board_drill.tap" not in left
+    assert {"notes.txt", "other_board_back.nc"} <= left
+    assert "my_board_back.txt" in left and os.path.join(out, "my_board_back.txt") in result.files
+
+
+def test_flip_frame_steps_use_the_chosen_extension(board):
+    s = Settings()
+    s.general.frame_mode = True
+    s.general.sides = "both"
+    s.general.file_extension = "gcode"
+    s.mask.enabled = False
+    result = run_job(request(board, s), lambda line: None)
+    steps = open(os.path.join(result.output_dir, "STEPS.txt")).read()
+    assert "my_board_front.gcode  (top side)" in steps and "my_board_back.gcode  (bottom side)" in steps
+
+
+def test_unknown_extension_falls_back():
+    s = Settings.from_dict({"general": {"file_extension": ".EXE"}})
+    assert s.general.file_extension == "ngc"
+    assert Settings.from_dict({"general": {"file_extension": ".NC"}}).general.file_extension == "nc"

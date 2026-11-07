@@ -29,6 +29,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--no-mask", action="store_true", help="skip milling the solder mask openings")
     p.add_argument("--skip-first-pause", action="store_true",
                    help="remove the M0 pause at the start of each G-code file")
+    p.add_argument("--ext", choices=("ngc", "nc", "gcode", "tap", "cnc", "txt"), help="G-code file extension")
     p.add_argument("--holes", choices=("merged", "separate", "pth", "npth"),
                    help="PTH and NPTH in one drill file, in two, or only one kind")
     p.add_argument("--frame", action="store_true",
@@ -61,6 +62,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         general["flip_axis"] = args.flip
     if args.outer_layers_only:
         general["outer_layers_only"] = True
+    if args.ext:
+        general["file_extension"] = args.ext
     if args.output:
         general["output_subdir"] = args.output
 

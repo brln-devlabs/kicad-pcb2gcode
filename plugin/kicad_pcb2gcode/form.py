@@ -57,6 +57,17 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
               tip=("Relative to the board file, or an absolute path.", "Relativ zur Board-Datei oder absoluter Pfad.")),
         Field("general", "basename", ("File name prefix", "Dateinamen-Präfix"), "text",
               tip=("Empty: board name.", "Leer: Name des Boards.")),
+        Field("general", "file_extension", ("File extension", "Dateiendung"), "choice", choices=(
+            ("ngc", (".ngc (pcb2gcode, LinuxCNC)", ".ngc (pcb2gcode, LinuxCNC)")),
+            ("nc", (".nc", ".nc")),
+            ("gcode", (".gcode", ".gcode")),
+            ("tap", (".tap", ".tap")),
+            ("cnc", (".cnc", ".cnc")),
+            ("txt", (".txt", ".txt")),
+        ), tip=("pcb2gcode writes .ngc; other extensions are applied afterwards. Pick what your G-code "
+                "sender opens without asking (Candle, UGS, bCNC ...).",
+                "pcb2gcode schreibt .ngc; andere Endungen werden danach vergeben. Wähle, was dein "
+                "G-Code-Sender direkt öffnet (Candle, UGS, bCNC …).")),
         Field("general", "open_folder_after", ("Open folder when done", "Ordner danach öffnen"), "bool"),
         Heading(("Coordinates and heights", "Koordinaten und Höhen")),
         Field("general", "zero_start", ("Board corner at X0/Y0", "Platinenecke auf X0/Y0"), "bool",

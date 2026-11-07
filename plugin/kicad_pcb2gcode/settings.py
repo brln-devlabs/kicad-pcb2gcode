@@ -33,12 +33,14 @@ FEED_DIRECTIONS = ("any", "climb", "conventional")
 FLIP_AXES = ("leftright", "topbottom")
 # merged: PTH+NPTH in one file; separate: two files; pth / npth: only that kind
 HOLE_MODES = ("merged", "separate", "pth", "npth")
+FILE_EXTENSIONS = ("ngc", "nc", "gcode", "tap", "cnc", "txt")
 
 
 @dataclass
 class GeneralSettings:
     output_subdir: str = "gcode"
     basename: str = ""  # empty: use the board file name
+    file_extension: str = "ngc"  # pcb2gcode writes .ngc; other choices are renamed afterwards
     sides: str = "auto"  # auto | front | back | both
     export_drill: bool = True
     export_outline: bool = True
@@ -185,6 +187,9 @@ class Settings:
 
     def sanitize(self) -> None:
         g, i, d, o = self.general, self.isolation, self.drill, self.outline
+        g.file_extension = g.file_extension.strip().lstrip(".").lower()
+        if g.file_extension not in FILE_EXTENSIONS:
+            g.file_extension = "ngc"
         if g.flip_axis not in FLIP_AXES:
             g.flip_axis = "leftright"
         if g.sides not in SIDES:

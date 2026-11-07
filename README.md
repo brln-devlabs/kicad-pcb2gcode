@@ -107,6 +107,10 @@ my-board/
     cam/                    exported Gerber and drill files
 ```
 
+The extension is selectable in the **General** tab (`.ngc`, `.nc`, `.gcode`,
+`.tap`, `.cnc`, `.txt`); pcb2gcode writes `.ngc` and the plugin renames the
+files afterwards.
+
 Run the files in your G-code sender (Candle, UGS, bCNC, CNCjs …) and change
 tools in between. pcb2gcode's own autoleveller does not support GRBL; use the
 height-map feature of your sender instead.

@@ -153,11 +153,11 @@ der Werkzeuggröße, Pause (`M0`, weiter mit Start/Resume), Spindel an. Mit
 aus) entfällt die erste Pause jeder Datei; Pausen für Werkzeugwechsel innerhalb
 einer Datei bleiben.
 
-Vor diesem Block fährt jede Datei zuerst Z auf Maschinenhöhe −5 mm (`G53 G0
-Z-5`, knapp unter dem Z-Endschalter) und dann über X0/Y0 – die Spindel fährt
-also nicht nach unten, bevor sie über dem Nullpunkt steht (**Am Anfang
-hochfahren und zu X0/Y0**, Reiter **Maschine**, standardmäßig an; die Höhe ist
-einstellbar). `G53` rechnet in Maschinenkoordinaten und braucht deshalb die
+Vor diesem Block fährt jede Datei zuerst Z auf Maschinenhöhe −60 mm (`G53 G0
+Z-60`, 60 mm unter dem Z-Endschalter) und dann über X0/Y0 – die Spindel fährt
+also erst zum Werkstück hinunter, wenn sie über dem Nullpunkt steht (**Am
+Anfang hochfahren und zu X0/Y0**, Reiter **Maschine**, standardmäßig an; die
+Höhe ist einstellbar). `G53` rechnet in Maschinenkoordinaten und braucht deshalb die
 Referenzfahrt (`$22=1`). Normaler G-Code kann nicht abfragen, wo Z gerade ist,
 „nur hochfahren, wenn sie unter der Verfahrhöhe ist“ geht daher nicht; ganz
 hochfahren ist der sichere Weg zum selben Ergebnis.

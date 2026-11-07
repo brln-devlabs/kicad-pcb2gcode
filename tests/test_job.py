@@ -565,12 +565,12 @@ def test_start_move_goes_up_then_to_the_origin_first(board):
     result = run_job(request(board), lambda line: None)
     for path in result.files:
         lines = [l.split("(")[0].strip() for l in open(path) if l.split("(")[0].strip()]
-        start = lines.index("G53 G0 Z-5")
+        start = lines.index("G53 G0 Z-60")
         assert lines[start + 1] == "G0 X0 Y0"
         before = lines[:start]
         assert "G21" in before and "G90" in before  # units and absolute mode are set
         assert not any(l.startswith(("G0", "G1", "X", "Y", "Z")) for l in before)  # no move before it
-        assert lines.count("G53 G0 Z-5") == 1
+        assert lines.count("G53 G0 Z-60") == 1
 
 
 def test_start_move_can_be_switched_off(board):

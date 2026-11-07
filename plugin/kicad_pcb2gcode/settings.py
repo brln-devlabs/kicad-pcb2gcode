@@ -74,10 +74,10 @@ class MachineSettings:
     # file anyway; later stops (real tool changes inside a file) stay.
     skip_first_pause: bool = False
     # Before anything else each file raises Z to this height in machine
-    # coordinates (G53, so it needs homing - just below the Z limit switch)
+    # coordinates (G53, so it needs homing; -60 = 60 mm below the Z limit switch)
     # and moves over X0/Y0.
     start_at_origin: bool = True
-    start_machine_z: float = -5.0
+    start_machine_z: float = -60.0
     extra_options: str = ""  # raw millproject lines, appended verbatim
 
 

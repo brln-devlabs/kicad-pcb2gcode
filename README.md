@@ -144,10 +144,10 @@ the tool size, a pause (`M0`, resume with cycle start), spindle on. With
 the first pause of each file is removed; pauses for tool changes inside a file
 stay.
 
-Before that block, every file first moves Z up to machine height −5 mm (`G53 G0
-Z-5`, just below the Z limit switch) and then over X0/Y0, so the spindle never
-goes down before it is above the origin (**Start at X0/Y0, raised to machine
-Z**, tab **Machine**, on by default; the height is adjustable). `G53` uses
+Before that block, every file first moves Z to machine height −60 mm (`G53 G0
+Z-60`, 60 mm below the Z limit switch) and then over X0/Y0, so the spindle only
+goes down to the work once it is above the origin (**Start at X0/Y0, raised to
+machine Z**, tab **Machine**, on by default; the height is adjustable). `G53` uses
 machine coordinates and therefore needs homing (`$22=1`). Plain G-code cannot
 ask where Z is, so "only go up if it is below the travel height" is not
 possible; going all the way up is the safe way to get the same result.

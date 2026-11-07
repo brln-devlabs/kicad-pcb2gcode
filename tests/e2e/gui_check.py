@@ -114,18 +114,25 @@ for index, (label, path) in enumerate(panel.entries):
     # glide in by 4 notches; one idle step between frames, as in the event loop
     panel.on_wheel(NS(GetPosition=lambda: (w // 3, h // 2), GetWheelRotation=lambda: 480, GetWheelDelta=lambda: 120))
     frames = []
+    trace = []
     k = 0
     while panel._anim.IsRunning():
         time.sleep(0.01)
         panel.on_frame(None)
+        before = dict(panel.stats)
         if k == 3:
             frames.append(snapshot("preview_{:02d}_glide".format(index)))
         else:
             frames.append(paint_ms())
+        trace.append("{:.0f}{}{}".format(frames[-1], "t" * (panel.stats["tiles"] - before["tiles"]),
+                                          "h" * (panel.stats["holes"] - before["holes"])))
         k += 1
         ev = Idle()
         ev.more = False
+        t = time.perf_counter()
+        before = dict(panel.stats)
         panel.on_idle(ev)
+        trace.append("i{:.0f}{}".format((time.perf_counter() - t) * 1000, "t" * (panel.stats["tiles"] - before["tiles"])))
     settle = snapshot("preview_{:02d}_zoom".format(index))
     idle_until_done()
     panel.on_press(NS(GetPosition=lambda: (200, 200)))
@@ -138,6 +145,7 @@ for index, (label, path) in enumerate(panel.entries):
           "glide {} frames {} | settle {:6.1f} | drag {}".format(
               label[:32], prep, first, "HEAVY" if heavy else "light", prefetch, rest, len(frames),
               stats(frames), settle, stats(drags)))
+    print("     glide trace:", " ".join(trace))
     panel.fit()
 
 dlg.SetSize(wx.Size(1300, 800))

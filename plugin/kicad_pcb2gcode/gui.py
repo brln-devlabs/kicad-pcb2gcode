@@ -206,6 +206,7 @@ class PreviewPanel(wx.Panel):
         self._heavy = False
         self._base = 1.0
         self.last_frame_ms = 0.0
+        self.stats = {"tiles": 0, "holes": 0}  # rendered tiles and directly drawn holes, for tests
 
         title = wx.StaticText(self, label=tr("Preview", "Vorschau"))
         font = title.GetFont()
@@ -485,6 +486,7 @@ class PreviewPanel(wx.Panel):
     def _render_key(self, key: Tuple) -> None:
         if key in self._tiles:
             return
+        self.stats["tiles"] += 1
         if key[0] == "e":
             _, scale, (fx, fy), tx, ty = key
             self._tiles.put(key, self._render((fx - tx * TILE, fy - ty * TILE), scale))
@@ -524,6 +526,7 @@ class PreviewPanel(wx.Panel):
             rect = (tx * TILE / scale, ty * TILE / scale, (tx + 1) * TILE / scale, (ty + 1) * TILE / scale)
             if any(all(k in self._tiles for k in self._pyramid_keys(lv, rect)) for lv in fallbacks):
                 continue
+            self.stats["holes"] += 1
             x0 = self._origin[0] + rect[0] * self._scale
             y0 = self._origin[1] + rect[1] * self._scale
             gc.PushState()

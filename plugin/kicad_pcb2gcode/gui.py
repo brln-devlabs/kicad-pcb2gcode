@@ -615,12 +615,13 @@ class PreviewPanel(wx.Panel):
                 event.RequestMore()
                 return
         if self._heavy:
-            end = time.perf_counter() + self.IDLE_BUDGET_MS / 1000.0
+            # while the glide runs, one tile per pause, so the next frame is not held up
+            end = time.perf_counter() + (0.0 if busy else self.IDLE_BUDGET_MS / 1000.0)
             rendered = False
             for key in self._wanted():
                 if key in self._tiles:
                     continue
-                if time.perf_counter() >= end:
+                if rendered and time.perf_counter() >= end:
                     event.RequestMore()
                     return
                 self._render_key(key)

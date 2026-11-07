@@ -83,9 +83,11 @@ Lötstopp – und ganz oben Stellen, an denen der Abstand nicht eingehalten werd
 konnte. Sie füllt sich nach **G-Code erzeugen** und zeigt beim Öffnen des
 Fensters die Bilder des letzten Laufs. Mit dem Mausrad wird flüssig um den Mauszeiger
 gezoomt, Ziehen mit linker oder mittlerer Taste verschiebt die Ansicht,
-Doppelklick oder **⤢** passt das Bild wieder ein. Jedes Bild wird als Vektorgrafik
-gezeichnet, auch während des Zoomens und Verschiebens – es bleibt in jeder
-Vergrößerung scharf. Die Bilder liegen in
+Doppelklick oder **⤢** passt das Bild wieder ein. Gezeichnet wird aus den Vektorpfaden,
+auch während des Zoomens und Verschiebens – das Bild bleibt in jeder
+Vergrößerung scharf. Große Bilder werden auf das vereinfacht, was der Bildschirm
+zeigen kann (unter einem halben Pixel), und in Kacheln genau in der aktuellen
+Vergrößerung vorgehalten. Die Bilder liegen in
 `gcode/preview/`;
 **↗** öffnet das gewählte im Webbrowser (nötig mit wxPython älter als 4.1, das
 kein SVG zeichnen kann).

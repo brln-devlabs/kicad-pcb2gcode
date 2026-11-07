@@ -81,8 +81,9 @@ solder mask – and, listed first, spots where the clearance could not be kept.
 It fills after **Generate G-code** and shows the last run's images when the
 window opens. Zoom smoothly with the mouse wheel (around the pointer), drag with the
 left or middle button to move the view, double-click or **⤢** to fit. Every
-frame is drawn as vectors, also while zooming and moving, so the image stays
-sharp at any zoom. The
+frame is drawn from the vector paths, also while zooming and moving, so the image
+stays sharp at any zoom. Large images are simplified to what the screen can show
+(below half a pixel) and kept in tiles rendered at exactly the current zoom. The
 images are kept in `gcode/preview/`; **↗** opens the selected
 one in the web browser (needed with wxPython older than 4.1, which cannot draw
 SVG).

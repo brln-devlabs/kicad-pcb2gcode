@@ -18,58 +18,113 @@ import os
 import re
 import shutil
 import sys
-from typing import List
+from typing import List, Tuple
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(ROOT, "plugin")
 FOLDER_NAME = "kicad-pcb2gcode"
 
 
-def documents_homes() -> List[str]:
-    """Candidate KiCad documents folders, existing ones only."""
-    env = os.environ.get("KICAD_DOCUMENTS_HOME")
-    homes = [env] if env else []
+def _windows_documents() -> str:
+    """The real "Documents" folder, also when it is moved or redirected to OneDrive."""
+    try:
+        import ctypes
+
+        buf = ctypes.create_unicode_buffer(260)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf) == 0 and buf.value:  # CSIDL_PERSONAL
+            return buf.value
+    except Exception:
+        pass
+    return os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")), "Documents")
+
+
+def locations() -> List[Tuple[str, str]]:
+    """(documents home, config dir) pairs where a KiCad installation keeps its
+    plugins and its settings - normal install and Flatpak on Linux."""
     home = os.path.expanduser("~")
+    env = os.environ.get("KICAD_DOCUMENTS_HOME")
+    pairs: List[Tuple[str, str]] = []
     if sys.platform == "win32":
-        profile = os.environ.get("USERPROFILE", home)
-        homes += [os.path.join(profile, "Documents", "KiCad"),
-                  os.path.join(profile, "OneDrive", "Documents", "KiCad"),
-                  os.path.join(profile, "OneDrive", "Dokumente", "KiCad")]
+        appdata = os.environ.get("APPDATA") or os.path.join(home, "AppData", "Roaming")
+        docs = _windows_documents()
+        pairs.append((os.path.join(docs, "KiCad"), os.path.join(appdata, "kicad")))
+        for alt in (os.path.join(home, "Documents"), os.path.join(home, "OneDrive", "Documents"),
+                    os.path.join(home, "OneDrive", "Dokumente")):
+            pairs.append((os.path.join(alt, "KiCad"), os.path.join(appdata, "kicad")))
     elif sys.platform == "darwin":
-        homes.append(os.path.join(home, "Documents", "KiCad"))
+        pairs.append((os.path.join(home, "Documents", "KiCad"),
+                      os.path.join(home, "Library", "Preferences", "kicad")))
     else:
         data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
-        homes += [os.path.join(data, "kicad"), os.path.join(data, "KiCad")]
-    seen, result = set(), []
-    for h in homes:
-        real = os.path.realpath(h)
-        if os.path.isdir(h) and real not in seen:
-            seen.add(real)
-            result.append(h)
-    return result
+        config = os.environ.get("XDG_CONFIG_HOME") or os.path.join(home, ".config")
+        pairs.append((os.path.join(data, "kicad"), os.path.join(config, "kicad")))
+        pairs.append((os.path.join(data, "KiCad"), os.path.join(config, "kicad")))
+        flatpak = os.path.join(home, ".var", "app", "org.kicad.KiCad")
+        pairs.append((os.path.join(flatpak, "data", "kicad"), os.path.join(flatpak, "config", "kicad")))
+    if env:
+        pairs.insert(0, (env, pairs[0][1]))
+    return pairs
 
 
-def version_dirs(home: str) -> List[str]:
+def version_dirs(folder: str) -> List[str]:
+    """Version names >= 9 ("9.0", "10.0") that exist below ``folder``."""
+    if not os.path.isdir(folder):
+        return []
     found = []
-    for name in os.listdir(home):
+    for name in os.listdir(folder):
         m = re.fullmatch(r"(\d+)\.(\d+)", name)
-        if m and int(m.group(1)) >= 9 and os.path.isdir(os.path.join(home, name)):
-            found.append(os.path.join(home, name))
-    return sorted(found)
+        if m and int(m.group(1)) >= 9 and os.path.isdir(os.path.join(folder, name)):
+            found.append(name)
+    return sorted(found, key=lambda v: tuple(int(x) for x in v.split(".")))
 
 
 def targets(args: argparse.Namespace) -> List[str]:
+    """Plugin folders to install into.
+
+    A KiCad version counts as installed when its documents folder or its
+    settings folder exists (KiCad creates the settings on first start, the
+    documents folder only when something is saved there). Missing folders
+    are created.
+    """
     if args.plugins_dir:
         return [args.plugins_dir]
-    homes = documents_homes()
-    if not homes:
-        sys.exit("No KiCad documents folder found. Start KiCad once, or pass --plugins-dir.")
+    pairs = locations()
     if args.kicad_version:
-        return [os.path.join(homes[0], args.kicad_version, "plugins")]
-    dirs = [os.path.join(v, "plugins") for h in homes for v in version_dirs(h)]
-    if not dirs:
-        sys.exit("No KiCad 9 or newer found in {}. Pass --kicad-version or --plugins-dir.".format(", ".join(homes)))
-    return dirs
+        for docs, config in pairs:
+            if os.path.isdir(docs) or os.path.isdir(config):
+                return [os.path.join(docs, args.kicad_version, "plugins")]
+        return [os.path.join(pairs[0][0], args.kicad_version, "plugins")]
+    result: List[str] = []
+    seen = set()
+
+    def add(docs: str, version: str) -> None:
+        target = os.path.join(docs, version, "plugins")
+        key = os.path.normcase(os.path.realpath(target))
+        if key not in seen:
+            seen.add(key)
+            result.append(target)
+
+    # versions that already have a documents folder
+    for docs, _ in pairs:
+        for version in version_dirs(docs):
+            add(docs, version)
+    # versions known only from their settings: use the first documents folder
+    # of that installation that exists, else its default one
+    for config in dict.fromkeys(c for _, c in pairs):
+        candidates = [d for d, c in pairs if c == config]
+        docs = next((d for d in candidates if os.path.isdir(d)), candidates[0])
+        for version in version_dirs(config):
+            if not any(os.path.isdir(os.path.join(d, version)) for d in candidates):
+                add(docs, version)
+    if not result:
+        searched = "\n  ".join(sorted({p for pair in pairs for p in pair}))
+        sys.exit(
+            "No KiCad 9 or newer found. Searched:\n  {}\n\n"
+            "Start KiCad once, or install explicitly:\n"
+            "  python scripts/install.py --kicad-version 9.0\n"
+            "  python scripts/install.py --plugins-dir <KiCad documents folder>/<version>/plugins".format(searched)
+        )
+    return result
 
 
 def remove(path: str) -> None:

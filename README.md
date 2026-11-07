@@ -72,7 +72,9 @@ Open a board, press the toolbar button, check the settings, press
   see below.
 * **Machine** – G-code dialect switches and extra pcb2gcode options.
 
-If KiCad's drill/place file origin is still at 0/0, a small note under the
+Gerber and drill files are exported relative to KiCad's drill/place file
+origin (**Use drill/place file origin**, on by default – the same as the
+option in KiCad's plot dialog). If that origin is still at 0/0, a small note under the
 file name says so (hover it for details) and the log repeats it. With
 **Board corner at X0/Y0** the G-code does not depend on that origin; it only
 matters with **Use drill/place file origin** on and the board corner off.

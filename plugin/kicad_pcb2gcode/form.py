@@ -64,7 +64,11 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
                    "The bottom side is mirrored about the board's centre line, so it uses the same area.",
                    "Legt die linke untere Ecke der Platinenkontur genau auf den Nullpunkt. Die Unterseite "
                    "wird um die Platinenmitte gespiegelt und liegt im selben Bereich.")),
-        Field("general", "use_aux_origin", ("Use drill/place file origin", "Bohr-/Platzierungsursprung verwenden"), "bool"),
+        Field("general", "use_aux_origin", ("Use drill/place file origin", "Bohr-/Platzierungsursprung verwenden"), "bool",
+              tip=("Gerber and drill files are exported relative to KiCad's drill/place file origin, "
+                   "like 'Use drill/place file origin' in KiCad's plot dialog.",
+                   "Gerber- und Bohrdateien werden relativ zu KiCads Bohr-/Platzierungsursprung exportiert, "
+                   "wie mit 'Bohr-/Platzierungsursprung verwenden' im Plotten-Dialog von KiCad.")),
         Field("general", "zsafe", ("Safe height", "Sicherheitshöhe"), "float", "mm"),
         Field("general", "zchange", ("Tool change height", "Werkzeugwechselhöhe"), "float", "mm"),
     ]),

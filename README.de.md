@@ -74,7 +74,10 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
   an), siehe unten.
 * **Maschine** – G-Code-Dialekt und zusätzliche pcb2gcode-Optionen.
 
-Steht KiCads Bohr-/Platzierungsursprung noch auf 0/0, weist ein kleiner
+Gerber- und Bohrdateien werden relativ zu KiCads Bohr-/Platzierungsursprung
+exportiert (**Bohr-/Platzierungsursprung verwenden**, standardmäßig an – wie die
+gleichnamige Option im Plotten-Dialog von KiCad). Steht dieser Ursprung noch auf
+0/0, weist ein kleiner
 Hinweis unter dem Dateinamen darauf hin (Details per Mauszeiger), und das
 Protokoll wiederholt ihn. Mit **Platinenecke auf X0/Y0** hängt der G-Code nicht
 von diesem Ursprung ab; er zählt nur, wenn **Bohr-/Platzierungsursprung

@@ -86,15 +86,25 @@ def test_gerbers_fallback(board, monkeypatch):
     assert os.path.isfile(os.path.join(result.output_dir, "cam", "back.gbr"))
 
 
-def test_aux_origin_reaches_kicad_cli(board, tmp_path, monkeypatch):
+def test_exports_use_the_drill_origin_by_default(board, tmp_path, monkeypatch):
+    calls = tmp_path / "calls.txt"
+    monkeypatch.setenv("FAKE_CLI_LOG", str(calls))
+    run_job(request(board), lambda line: None)
+    lines = calls.read_text().splitlines()
+    gerbers = [line for line in lines if line.startswith("pcb export gerber ")]
+    assert gerbers and all("--use-drill-file-origin" in line for line in gerbers)
+    assert any("--drill-origin plot" in line for line in lines)
+
+
+def test_drill_origin_can_be_switched_off(board, tmp_path, monkeypatch):
     calls = tmp_path / "calls.txt"
     monkeypatch.setenv("FAKE_CLI_LOG", str(calls))
     s = Settings()
-    s.general.use_aux_origin = True
+    s.general.use_aux_origin = False
     run_job(request(board, s), lambda line: None)
     text = calls.read_text()
-    assert "--use-drill-file-origin" in text
-    assert "--drill-origin plot" in text
+    assert "--use-drill-file-origin" not in text
+    assert "--drill-origin absolute" in text
 
 
 def test_pcb2gcode_failure_is_reported(board, monkeypatch):

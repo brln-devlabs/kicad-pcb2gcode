@@ -40,7 +40,7 @@ class GeneralSettings:
     sides: str = "auto"  # auto | front | back | both
     export_drill: bool = True
     export_outline: bool = True
-    use_aux_origin: bool = False  # KiCad drill/place file origin instead of absolute
+    use_aux_origin: bool = True  # export Gerber and drill files relative to KiCad's drill/place file origin
     include_unsaved: bool = True  # export a copy of the open board, unsaved edits included
     outer_layers_only: bool = False  # mill F.Cu/B.Cu even if inner layers carry copper
     zero_start: bool = True  # lower-left corner of the board outline at X0/Y0

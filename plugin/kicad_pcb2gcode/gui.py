@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import pathlib
 import threading
+import time
 import webbrowser
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -28,11 +29,77 @@ from .app import BoardContext, drill_origin_tip, generate, open_folder
 from .form import PAGES, Field, Heading, Row, format_number, parse_number, label_text
 from .i18n import tr
 from .job import JobError
-from .preview import ease_scale, fit_view, list_previews, raster_size, wheel_factor, zoom_at
+from . import vector
+from .preview import ease_fraction, ease_scale, fit_view, list_previews, wheel_factor, zoom_at
 from .settings import AppConfig, Settings, save_config
 
 
 # -- preview ------------------------------------------------------------------
+
+
+class _WxScene:
+    """The preview image as ready-made ``wx.GraphicsPath`` objects with their
+    pens and brushes, built once per image and drawn as vectors every frame."""
+
+    def __init__(self, svg: Any):
+        renderer = wx.GraphicsRenderer.GetDefaultRenderer()
+        items = vector.build_scene(svg.shapes, (svg.width, svg.height))
+        pens: Dict[Any, Any] = {}
+        brushes: Dict[Any, Any] = {}
+        self.items: List[Tuple[vector.Item, Any, Any, Any, int]] = []
+        for item in items:
+            style = item.style
+            pen = brush = None
+            if style.stroke is not None:
+                key = (style.stroke, style.width, style.join, style.cap)
+                if key not in pens:
+                    pens[key] = self._pen(renderer, style)
+                pen = pens[key]
+            if style.fill is not None:
+                if style.fill not in brushes:
+                    brushes[style.fill] = renderer.CreateBrush(wx.Brush(wx.Colour(*style.fill)))
+                brush = brushes[style.fill]
+            path = renderer.CreatePath()
+            for closed, (sx, sy), segments in item.paths:
+                path.MoveToPoint(sx, sy)
+                for seg in segments:
+                    if len(seg) == 2:
+                        path.AddLineToPoint(seg[0], seg[1])
+                    else:
+                        path.AddCurveToPoint(*seg)
+                if closed:
+                    path.CloseSubpath()
+            rule = wx.ODDEVEN_RULE if style.evenodd else wx.WINDING_RULE
+            self.items.append((item, path, pen, brush, rule))
+
+    @staticmethod
+    def _pen(renderer: Any, style: "vector.Style") -> Any:
+        colour = wx.Colour(*style.stroke)
+        join = {vector.JOIN_ROUND: wx.JOIN_ROUND, vector.JOIN_BEVEL: wx.JOIN_BEVEL}.get(style.join, wx.JOIN_MITER)
+        cap = {vector.CAP_ROUND: wx.CAP_ROUND, vector.CAP_SQUARE: wx.CAP_PROJECTING}.get(style.cap, wx.CAP_BUTT)
+        try:
+            return renderer.CreatePen(wx.GraphicsPenInfo(colour).Width(style.width).Join(join).Cap(cap))
+        except AttributeError:  # wx older than 3.1.1: integer widths only
+            pen = wx.Pen(colour, max(1, int(round(style.width))))
+            pen.SetJoin(join)
+            pen.SetCap(cap)
+            return renderer.CreatePen(pen)
+
+    def draw(self, gc: Any, view: Tuple[float, float, float, float]) -> None:
+        current_pen = current_brush = None
+        for item, path, pen, brush, rule in self.items:
+            if not vector.visible(item, view):
+                continue
+            if brush is not None:
+                if brush is not current_brush:
+                    gc.SetBrush(brush)
+                    current_brush = brush
+                gc.FillPath(path, rule)
+            if pen is not None:
+                if pen is not current_pen:
+                    gc.SetPen(pen)
+                    current_pen = pen
+                gc.StrokePath(path)
 
 
 class PreviewPanel(wx.Panel):
@@ -40,21 +107,20 @@ class PreviewPanel(wx.Panel):
     outline, solder mask and clearance problems, like pcb2gcodeGUI does.
 
     Mouse wheel zooms smoothly around the pointer, dragging with the left or
-    middle button moves the view, a double click fits the image again.
-
-    Drawing has two layers: a raster of the whole image, scaled on the fly
-    while zooming or dragging (fast, so the whole board is always visible),
-    and - once the view rests - the visible part redrawn as vectors, sharp at
-    any zoom.
+    middle button moves the view, a double click fits the image again. Every
+    frame - also while zooming and dragging - is drawn as vectors from paths
+    prepared once per image (see ``vector``), so it is sharp at any zoom.
     """
 
-    FRAME_MS = 15
-    SETTLE_MS = 120
+    FRAME_MS = 10
+    CACHE = 8  # prepared images kept, so switching layers is instant
 
     def __init__(self, parent: wx.Window):
         super().__init__(parent)
         self.entries: List[Tuple[str, str]] = []
         self._svg: Any = None
+        self._scene: Optional[_WxScene] = None
+        self._scenes: Dict[Tuple[str, float, int], Optional[_WxScene]] = {}
         self._path = ""
         # view: screen position of the image's (0, 0) and pixels per image unit
         self._origin = (0.0, 0.0)
@@ -62,21 +128,20 @@ class PreviewPanel(wx.Panel):
         self._fit_scale = 1.0
         self._fitted = True  # follow window size until the user zooms or pans
         self._drag: Optional[Tuple[Tuple[int, int], Tuple[float, float]]] = None
-        # zoom animation: target scale and the image point that stays under the pointer
+        # zoom animation: target scale, the image point that stays under the
+        # pointer, and the time of the last frame
         self._target = 1.0
         self._anchor: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
-        # whole-image raster (bitmap, its scale) and the sharp view (bitmap, origin, scale)
-        self._raster: Optional[Tuple[wx.Bitmap, float]] = None
-        self._sharp: Optional[Tuple[wx.Bitmap, Tuple[float, float], float]] = None
+        self._last_frame = 0.0
 
         title = wx.StaticText(self, label=tr("Preview", "Vorschau"))
         font = title.GetFont()
         font.SetWeight(wx.FONTWEIGHT_BOLD)
         title.SetFont(font)
         self.choice = wx.Choice(self, choices=[])
-        self.btn_fit = wx.Button(self, label="\u2922", size=wx.Size(36, -1))
+        self.btn_fit = wx.Button(self, label="⤢", size=wx.Size(36, -1))
         self.btn_fit.SetToolTip(tr("Fit to window (or double-click)", "Einpassen (oder Doppelklick)"))
-        self.btn_open = wx.Button(self, label="\u2197", size=wx.Size(36, -1))
+        self.btn_open = wx.Button(self, label="↗", size=wx.Size(36, -1))
         self.btn_open.SetToolTip(tr("Open the image in the web browser", "Bild im Webbrowser öffnen"))
         self.canvas = wx.Panel(self, style=wx.BORDER_SIMPLE | wx.WANTS_CHARS)
         self.canvas.SetBackgroundStyle(wx.BG_STYLE_PAINT)
@@ -96,8 +161,6 @@ class PreviewPanel(wx.Panel):
 
         self._anim = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_frame, self._anim)
-        self._settle = wx.CallLater(self.SETTLE_MS, self._make_sharp)
-        self._settle.Stop()
 
         self.choice.Bind(wx.EVT_CHOICE, lambda evt: self._load())
         self.btn_fit.Bind(wx.EVT_BUTTON, lambda evt: self.fit())
@@ -135,13 +198,36 @@ class PreviewPanel(wx.Panel):
         index = self.choice.GetSelection()
         self._path = self.entries[index][1] if self.entries and index >= 0 else ""
         self._svg = None
-        self._raster = None
+        self._scene = None
         if self._path and HAVE_SVG:
             try:
                 self._svg = wx.svg.SVGimage.CreateFromFile(self._path)
             except Exception:
                 self._svg = None
+            if self._has_image():
+                self._scene = self._prepare(self._path)
         self.fit()
+
+    def _prepare(self, path: str) -> Optional[_WxScene]:
+        """Paths of the image, from the cache when the file is unchanged."""
+        try:
+            stat = os.stat(path)
+            key = (path, stat.st_mtime, stat.st_size)
+        except OSError:
+            key = (path, 0.0, 0)
+        if key not in self._scenes:
+            busy = wx.BusyCursor()
+            try:
+                scene: Optional[_WxScene] = _WxScene(self._svg)
+            except Exception:
+                scene = None  # unusual wx.svg: draw with RenderToGC instead
+            del busy
+            for old in [k for k in self._scenes if k[0] == path]:
+                del self._scenes[old]
+            while len(self._scenes) >= self.CACHE:
+                del self._scenes[next(iter(self._scenes))]
+            self._scenes[key] = scene
+        return self._scenes[key]
 
     def _has_image(self) -> bool:
         return self._svg is not None and self._svg.width > 0 and self._svg.height > 0
@@ -151,18 +237,14 @@ class PreviewPanel(wx.Panel):
             return tr("No preview yet - it appears after generating.",
                       "Noch keine Vorschau - sie erscheint nach dem Erzeugen.")
         if not HAVE_SVG:
-            return tr("The preview needs wxPython 4.1 or newer.\nOpen the image with \u2197.",
-                      "Die Vorschau braucht wxPython 4.1 oder neuer.\nBild mit \u2197 öffnen.")
+            return tr("The preview needs wxPython 4.1 or newer.\nOpen the image with ↗.",
+                      "Die Vorschau braucht wxPython 4.1 oder neuer.\nBild mit ↗ öffnen.")
         return tr("This image cannot be shown.", "Dieses Bild lässt sich nicht anzeigen.")
 
     # -- view -------------------------------------------------------------
 
-    def _changed(self) -> None:
-        """The view moved: show the raster now, the sharp drawing once it rests."""
-        self._sharp = None
+    def _redraw(self) -> None:
         self.canvas.Refresh(eraseBackground=False)
-        if self._has_image():
-            self._settle.Start(self.SETTLE_MS)
 
     def fit(self) -> None:
         self._anim.Stop()
@@ -172,19 +254,16 @@ class PreviewPanel(wx.Panel):
             ox, oy, scale = fit_view(self._svg.width, self._svg.height, width, height)
         else:
             ox, oy, scale = 0.0, 0.0, 1.0
-        rescale_raster = self._raster is None or scale != self._fit_scale
         self._origin, self._scale, self._fit_scale, self._target = (ox, oy), scale, scale, scale
         self._fitted = True
-        if rescale_raster:
-            self._raster = None
-        self._changed()
+        self._redraw()
 
     def on_size(self, event: wx.SizeEvent) -> None:
         event.Skip()
         if self._fitted:
             self.fit()
         else:
-            self._changed()
+            self._redraw()
 
     def on_wheel(self, event: wx.MouseEvent) -> None:
         if not self._has_image():
@@ -197,25 +276,28 @@ class PreviewPanel(wx.Panel):
         self._target = zoom_at(0.0, 0.0, self._target, 0.0, 0.0, factor, self._fit_scale)[2]
         self._fitted = False
         if not self._anim.IsRunning():
+            self._last_frame = time.perf_counter()
             self._anim.Start(self.FRAME_MS)
 
     def on_frame(self, event: wx.TimerEvent) -> None:
-        self._scale, done = ease_scale(self._scale, self._target)
+        now = time.perf_counter()
+        # time based: a slow frame moves further, so the glide keeps its pace
+        fraction = ease_fraction(min(now - self._last_frame, 0.1))
+        self._last_frame = now
+        self._scale, done = ease_scale(self._scale, self._target, fraction)
         if self._anchor is not None:
             (sx, sy), (ix, iy) = self._anchor
             self._origin = (sx - ix * self._scale, sy - iy * self._scale)
         if done:
             self._anim.Stop()
             self._anchor = None
-        self._changed()
+        self._redraw()
 
     def _finish_zoom(self) -> None:
+        """Stop the glide where it is, so a drag starts from what is on screen."""
         if self._anim.IsRunning():
-            self._scale = self._target
-            if self._anchor is not None:
-                (sx, sy), (ix, iy) = self._anchor
-                self._origin = (sx - ix * self._scale, sy - iy * self._scale)
             self._anim.Stop()
+            self._target = self._scale
             self._anchor = None
 
     def on_press(self, event: wx.MouseEvent) -> None:
@@ -234,12 +316,11 @@ class PreviewPanel(wx.Panel):
         x, y = event.GetPosition()
         self._origin = (ox + x - sx, oy + y - sy)
         self._fitted = False
-        self._changed()
+        self._redraw()
 
     def on_release(self, event: wx.MouseEvent) -> None:
         if self._drag is not None:
             self._end_drag()
-            self._changed()
 
     def _end_drag(self) -> None:
         self._drag = None
@@ -250,42 +331,9 @@ class PreviewPanel(wx.Panel):
     def on_destroy(self, event: wx.WindowDestroyEvent) -> None:
         if event.GetEventObject() is self:
             self._anim.Stop()
-            self._settle.Stop()
         event.Skip()
 
     # -- drawing ----------------------------------------------------------
-
-    def _whole_raster(self) -> Optional[Tuple[wx.Bitmap, float]]:
-        """Raster of the whole image, made once per image and fit size."""
-        if self._raster is None and self._has_image():
-            w, h, scale = raster_size(self._svg.width, self._svg.height, self._fit_scale)
-            try:
-                self._raster = (self._svg.ConvertToScaledBitmap(wx.Size(w, h), self), scale)
-            except Exception:
-                self._raster = None
-        return self._raster
-
-    def _make_sharp(self) -> None:
-        """Vector drawing of exactly the visible part at the current view."""
-        if not self._has_image() or self._drag is not None or self._anim.IsRunning():
-            return
-        width, height = self.canvas.GetClientSize()
-        bitmap = wx.Bitmap(max(width, 1), max(height, 1))
-        dc = wx.MemoryDC(bitmap)
-        dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
-        dc.Clear()
-        try:
-            gc = wx.GraphicsContext.Create(dc)
-            gc.Translate(self._origin[0], self._origin[1])
-            gc.Scale(self._scale, self._scale)
-            self._svg.RenderToGC(gc)
-            del gc
-        except AttributeError:
-            dc.SelectObject(wx.NullBitmap)
-            return  # very old wx.svg without RenderToGC: the raster stays
-        dc.SelectObject(wx.NullBitmap)
-        self._sharp = (bitmap, self._origin, self._scale)
-        self.canvas.Refresh(eraseBackground=False)
 
     def on_paint(self, event: wx.PaintEvent) -> None:
         dc = wx.AutoBufferedPaintDC(self.canvas)
@@ -296,20 +344,16 @@ class PreviewPanel(wx.Panel):
             dc.SetTextForeground(wx.Colour(120, 120, 120))
             dc.DrawLabel(self._message(), wx.Rect(0, 0, width, height), wx.ALIGN_CENTER)
             return
-        sharp = self._sharp
-        if sharp is not None and sharp[1] == self._origin and sharp[2] == self._scale \
-                and sharp[0].GetWidth() == max(width, 1) and sharp[0].GetHeight() == max(height, 1):
-            dc.DrawBitmap(sharp[0], 0, 0)
-        else:
-            raster = self._whole_raster()
-            if raster is not None:
-                bitmap, _ = raster
-                gc = wx.GraphicsContext.Create(dc)
-                moving = self._drag is not None or self._anim.IsRunning()
-                gc.SetInterpolationQuality(wx.INTERPOLATION_FAST if moving else wx.INTERPOLATION_GOOD)
-                gc.DrawBitmap(bitmap, self._origin[0], self._origin[1],
-                              self._svg.width * self._scale, self._svg.height * self._scale)
-                del gc
+        gc = wx.GraphicsContext.Create(dc)
+        if gc is not None:
+            gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
+            gc.Translate(self._origin[0], self._origin[1])
+            gc.Scale(self._scale, self._scale)
+            if self._scene is not None:
+                self._scene.draw(gc, vector.view_rect(self._origin, self._scale, width, height))
+            else:
+                self._svg.RenderToGC(gc)
+            del gc
         if not self._fitted:
             zoom = "{:.0f} %".format(100.0 * self._scale / self._fit_scale)
             dc.SetTextForeground(wx.Colour(120, 120, 120))

@@ -83,7 +83,9 @@ Lötstopp – und ganz oben Stellen, an denen der Abstand nicht eingehalten werd
 konnte. Sie füllt sich nach **G-Code erzeugen** und zeigt beim Öffnen des
 Fensters die Bilder des letzten Laufs. Mit dem Mausrad wird flüssig um den Mauszeiger
 gezoomt, Ziehen mit linker oder mittlerer Taste verschiebt die Ansicht,
-Doppelklick oder **⤢** passt das Bild wieder ein. Die Bilder liegen in
+Doppelklick oder **⤢** passt das Bild wieder ein. Jedes Bild wird als Vektorgrafik
+gezeichnet, auch während des Zoomens und Verschiebens – es bleibt in jeder
+Vergrößerung scharf. Die Bilder liegen in
 `gcode/preview/`;
 **↗** öffnet das gewählte im Webbrowser (nötig mit wxPython älter als 4.1, das
 kein SVG zeichnen kann).
@@ -275,7 +277,8 @@ python scripts/flip_frame_svg.py   # Wenderahmen-Skizze neu zeichnen
 
 Der Code liegt in `plugin/kicad_pcb2gcode/`: `settings` (Modell und JSON),
 `millproject` (pcb2gcode-Konfiguration), `export` (kicad-cli-Befehle),
-`job` (Ablauf), `kicad_bridge` (IPC-API), `gui` (wxPython-Fenster).
+`job` (Ablauf), `kicad_bridge` (IPC-API), `gui` (wxPython-Fenster),
+`vector` (Vorschau-Pfade, vorbereitet für schnelles Neuzeichnen).
 
 ## Lizenz
 

@@ -80,7 +80,9 @@ pcb2gcodeGUI does: copper with tool paths per side, drill holes, outline,
 solder mask – and, listed first, spots where the clearance could not be kept.
 It fills after **Generate G-code** and shows the last run's images when the
 window opens. Zoom smoothly with the mouse wheel (around the pointer), drag with the
-left or middle button to move the view, double-click or **⤢** to fit. The
+left or middle button to move the view, double-click or **⤢** to fit. Every
+frame is drawn as vectors, also while zooming and moving, so the image stays
+sharp at any zoom. The
 images are kept in `gcode/preview/`; **↗** opens the selected
 one in the web browser (needed with wxPython older than 4.1, which cannot draw
 SVG).
@@ -262,7 +264,8 @@ python scripts/flip_frame_svg.py   # redraw the flip-frame sketch
 
 The code lives in `plugin/kicad_pcb2gcode/`: `settings` (model and JSON),
 `millproject` (pcb2gcode configuration), `export` (kicad-cli commands),
-`job` (pipeline), `kicad_bridge` (IPC API), `gui` (wxPython window).
+`job` (pipeline), `kicad_bridge` (IPC API), `gui` (wxPython window),
+`vector` (preview paths prepared for fast redrawing).
 
 ## License
 

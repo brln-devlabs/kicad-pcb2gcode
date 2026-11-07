@@ -100,11 +100,12 @@ def test_ease_scale_converges_both_ways():
         assert scale == target and 5 < steps < 30  # a short, visible glide
 
 
-def test_raster_size():
-    from kicad_pcb2gcode.preview import raster_size
+def test_ease_fraction_is_frame_rate_independent():
+    from kicad_pcb2gcode.preview import ease_fraction, ease_scale
 
-    w, h, s = raster_size(200, 100, fit_scale=2.0)
-    assert (w, h, s) == (1600, 800, 8.0)  # 4x the fitted size
-    w, h, s = raster_size(1000, 500, fit_scale=1.0, longest=2600)
-    assert (w, h, s) == (2600, 1300, 2.6)  # capped by the long side ...
-    assert raster_size(100, 100, fit_scale=50.0, longest=2600)[2] == 50.0  # ... but never below fit
+    assert ease_fraction(0) == 0.0
+    assert 0 < ease_fraction(0.016) < ease_fraction(0.032) < 1
+    # two short frames end where one long frame ends
+    one = ease_scale(1.0, 8.0, ease_fraction(0.032))[0]
+    two = ease_scale(ease_scale(1.0, 8.0, ease_fraction(0.016))[0], 8.0, ease_fraction(0.016))[0]
+    assert abs(one - two) < 1e-9

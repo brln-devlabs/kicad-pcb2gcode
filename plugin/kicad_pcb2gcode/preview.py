@@ -151,11 +151,11 @@ def ease_scale(current: float, target: float, fraction: float = 0.35):
     return current * (target / current) ** fraction, False
 
 
-def raster_size(image_w: float, image_h: float, fit_scale: float, longest: int = 2600):
-    """Pixel size of the whole-image raster used while zooming and dragging:
-    four times the fitted size, at most ``longest`` pixels on the long side."""
-    if image_w <= 0 or image_h <= 0:
-        return 0, 0, 0.0
-    scale = min(fit_scale * 4.0, longest / max(image_w, image_h))
-    scale = max(scale, fit_scale)
-    return max(int(image_w * scale), 1), max(int(image_h * scale), 1), scale
+def ease_fraction(seconds: float, time_constant: float = 0.06) -> float:
+    """Share of the remaining way to cover in ``seconds``: exponential easing
+    by time, so the glide looks the same however fast frames are drawn."""
+    import math
+
+    if seconds <= 0:
+        return 0.0
+    return 1.0 - math.exp(-seconds / time_constant)

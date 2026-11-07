@@ -135,6 +135,7 @@ for index, (label, path) in enumerate(panel.entries):
         trace.append("i{:.0f}{}".format((time.perf_counter() - t) * 1000, "t" * (panel.stats["tiles"] - before["tiles"])))
     settle = snapshot("preview_{:02d}_zoom".format(index))
     idle_until_done()
+    snapshot("preview_{:02d}_rest".format(index))
     panel.on_press(NS(GetPosition=lambda: (200, 200)))
     drags = []
     for k in range(20):

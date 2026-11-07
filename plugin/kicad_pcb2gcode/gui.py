@@ -540,22 +540,32 @@ class PreviewPanel(wx.Panel):
             gc.PopState()
 
     def _draw_tiled(self, dc: wx.DC, width: int, height: int) -> None:
-        exact = exact_tiles(self._origin, self._scale, width, height, self._svg.width, self._svg.height)
-        if not self._anim.IsRunning():
-            # at rest and while moving: exact tiles only - render what is missing
-            (ix, iy), _ = exact_grid(self._origin)
-            for tx, ty in exact:
+        budget_end = time.perf_counter() + self.PAINT_BUDGET_MS / 1000.0
+        view = vector.view_rect(self._origin, self._scale, width, height)
+        ready: List[Tuple[int, int, Any]] = []
+        missing = self._anim.IsRunning()
+        if not missing:
+            # at rest and while moving: tiles rendered at exactly this zoom,
+            # nearest to the centre first; the rest follows when idle
+            for tx, ty in exact_tiles(self._origin, self._scale, width, height, self._svg.width, self._svg.height):
                 key = self._exact_key(tx, ty)
-                self._render_key(key)
-                dc.DrawBitmap(self._tiles.get(key), ix + tx * TILE, iy + ty * TILE)
-            return
-        gc = wx.GraphicsContext.Create(dc)
-        if gc is not None:
-            gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
-            gc.SetInterpolationQuality(wx.INTERPOLATION_GOOD)
-            budget_end = time.perf_counter() + self.PAINT_BUDGET_MS / 1000.0
-            self._draw_pyramid(gc, vector.view_rect(self._origin, self._scale, width, height), budget_end)
-            del gc
+                if key not in self._tiles and time.perf_counter() < budget_end:
+                    self._render_key(key)
+                bmp = self._tiles.get(key)
+                if bmp is None:
+                    missing = True
+                else:
+                    ready.append((tx, ty, bmp))
+        if missing:  # the glide, or exact tiles still to come: the pyramid underneath
+            gc = wx.GraphicsContext.Create(dc)
+            if gc is not None:
+                gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
+                gc.SetInterpolationQuality(wx.INTERPOLATION_GOOD)
+                self._draw_pyramid(gc, view, budget_end)
+                del gc
+        (ix, iy), _ = exact_grid(self._origin)
+        for tx, ty, bmp in ready:
+            dc.DrawBitmap(bmp, ix + tx * TILE, iy + ty * TILE)
 
     def _wanted(self) -> List[Tuple]:
         """Tiles worth rendering ahead, most useful first."""

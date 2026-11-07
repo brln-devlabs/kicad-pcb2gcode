@@ -65,6 +65,12 @@ jobs:
           for f in out/gui-dense/preview_00_fit.png out/gui-dense/preview_00_zoom.png; do
             [ -f "$f" ] && { echo "PNG $f"; base64 -w0 "$f"; echo; }
           done
+      - name: Dump preview SVGs (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          for f in out/dense/preview/main/processed_front_final.svg out/dense/preview/mask/processed_front_final.svg; do
+            [ -f "$f" ] && { echo "SVG $f"; gzip -9c "$f" | base64 -w0; echo; }
+          done
       - uses: actions/upload-artifact@v5
         if: always()
         with:

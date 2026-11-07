@@ -26,13 +26,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view -R pcb2gcode/pcb2gcode --json tagName,assets -q '.tagName, .assets[].name'
-          asset=$(gh release view -R pcb2gcode/pcb2gcode --json assets -q '.assets[].name' | grep -i 'ubuntu-24.04' | grep -vi arm | grep '\.tar\.gz$' | head -1)
+          asset=$(gh release view -R pcb2gcode/pcb2gcode --json assets -q '.assets[].name' | grep -i "ubuntu-24.04_1_83_gplusplus_none" | grep '\.tar\.gz$' | head -1)
           echo "asset: $asset"
           mkdir -p "$HOME/p2g" && cd "$HOME/p2g"
           gh release download -R pcb2gcode/pcb2gcode --pattern "$asset"
           tar xzf "$asset"
           dir=$(dirname "$(find . -name pcb2gcode -type f | head -1)")
-          sudo apt-get install -y libgtkmm-2.4-1v5 libglib2.0-bin
+          sudo apt-get install -y libgtkmm-2.4-1v5 libglib2.0-bin libboost-program-options1.83.0
+          ldd "$dir/pcb2gcode" | grep "not found" || true
           printf '#!/bin/sh\nLD_LIBRARY_PATH=%s/.libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} exec %s/pcb2gcode "$@"\n' "$PWD/$dir" "$PWD/$dir" | sudo tee /usr/local/bin/pcb2gcode
           sudo chmod +x /usr/local/bin/pcb2gcode
           pcb2gcode --version

@@ -19,11 +19,12 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.12"]
         include:
-          - os: ubuntu-latest
-            python: "3.9"
+          # oldest Python KiCad 9 runs plugins with (Ubuntu 22.04 ships 3.10)
+          - os: ubuntu-24.04
+            python: "3.10"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install pytest
@@ -38,12 +39,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: python scripts/package.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: kicad-pcb2gcode
           path: dist/*.zip

@@ -76,6 +76,9 @@ jobs:
         with:
           name: e2e-output
           path: out/
+      - name: G-code extents
+        run: |
+          for d in out/rect out/frame out/rounded; do echo "== $d"; python3 tests/e2e/extents.py $d; grep -E "^(x-offset|y-offset|mirror-axis|zero-start|cut-side|drill-side)" $d/millproject; done
       - name: Check the outputs
         run: |
           python3 - <<'PY'

@@ -75,6 +75,14 @@ Open a board, press the toolbar button, check the settings, press
   see below.
 * **Machine** – G-code dialect switches and extra pcb2gcode options.
 
+Next to the tabs a **preview** shows the images pcb2gcode draws, as
+pcb2gcodeGUI does: copper with tool paths per side, drill holes, outline,
+solder mask – and, listed first, spots where the clearance could not be kept.
+It fills after **Generate G-code** and shows the last run's images when the
+window opens. The images are kept in `gcode/preview/`; **↗** opens the selected
+one in the web browser (needed with wxPython older than 4.1, which cannot draw
+SVG).
+
 Gerber and drill files are exported relative to KiCad's drill/place file
 origin (**Use drill/place file origin**, on by default – the same as the
 option in KiCad's plot dialog). If that origin is still at 0/0, a small note under the

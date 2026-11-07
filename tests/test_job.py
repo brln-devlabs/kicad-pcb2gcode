@@ -493,3 +493,15 @@ def test_unknown_extension_falls_back():
     s = Settings.from_dict({"general": {"file_extension": ".EXE"}})
     assert s.general.file_extension == "ngc"
     assert Settings.from_dict({"general": {"file_extension": ".NC"}}).general.file_extension == "nc"
+
+
+def test_previews_after_a_run(board, monkeypatch):
+    from kicad_pcb2gcode.preview import list_previews
+
+    monkeypatch.setenv("FAKE_CONTENTIONS", "1")
+    result = run_job(request(board), lambda line: None)
+    labels = [label for label, _ in list_previews(result.output_dir)]
+    assert labels[0].startswith("⚠")  # clearance problem first
+    assert "Bottom side (B.Cu)" in labels and "Drill" in labels and "Outline" in labels
+    assert "Solder mask top" in labels and "Solder mask bottom" in labels
+    assert not [f for f in os.listdir(result.output_dir) if f.endswith(".svg")]

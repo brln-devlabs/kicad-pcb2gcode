@@ -21,7 +21,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
-from . import gerber
+from . import gerber, preview
 from .boardfile import inner_copper_layers, read_board, special_via_kinds
 from .export import (
     COPPER_LAYERS,
@@ -519,6 +519,8 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
     millproject_path = os.path.join(req.output_dir, "millproject")
 
     clean_outputs(req.output_dir, basename)
+    preview.clear(req.output_dir)
+    run_keys = {"millproject": "main", NPTH_PROJECT: "npth", MASK_PROJECT: "mask"}
     for config, _, _, _, label in runs:
         if config == "millproject":
             log(tr("Running pcb2gcode ...", "Starte pcb2gcode ..."))
@@ -526,6 +528,8 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
         else:
             log(tr("Running pcb2gcode ({}) ...", "Starte pcb2gcode ({}) ...").format(label.rstrip(": ")))
             _run_pcb2gcode(req, [req.pcb2gcode, "--config", config], log)
+        # pcb2gcode's SVG names carry no board name: keep each run's images apart
+        preview.collect_run(req.output_dir, run_keys[config])
 
     files = sorted(glob.glob(os.path.join(req.output_dir, "*.ngc")))
     files = rename_outputs(files, req.settings.general.file_extension)

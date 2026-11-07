@@ -22,6 +22,19 @@ with open(config) as fh:
                 sys.exit(4)
             options[key] = value
 
+SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80" viewBox="0 0 100 80"><rect width="100" height="80" fill="#eee"/></svg>\n'
+for key in ("front", "back", "outline"):
+    if key in options:
+        for name in ("processed_{}.svg", "traced_{}.svg"):
+            with open(name.format(key), "w") as fh:
+                fh.write(SVG)
+if "drill" in options:
+    with open("original_drill.svg", "w") as fh:
+        fh.write(SVG)
+if os.environ.get("FAKE_CONTENTIONS") and "back" in options:
+    with open("contentions_back.svg", "w") as fh:
+        fh.write(SVG)
+
 for key in ("front", "back", "drill", "outline"):
     if key in options:
         if not os.path.isfile(options[key]):

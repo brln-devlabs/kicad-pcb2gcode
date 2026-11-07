@@ -9,17 +9,129 @@ where wxPython comes from (bundled with KiCad on Windows and macOS, the
 from __future__ import annotations
 
 import os
+import pathlib
 import threading
+import webbrowser
 from typing import Any, Dict, List, Optional, Tuple
 
 import wx
+
+try:  # SVG rendering arrived with wxPython 4.1 (KiCad 9/10 bundle 4.2)
+    import wx.svg
+
+    HAVE_SVG = True
+except ImportError:
+    HAVE_SVG = False
 
 from . import __version__
 from .app import BoardContext, drill_origin_tip, generate, open_folder
 from .form import PAGES, Field, Heading, Row, format_number, parse_number, label_text
 from .i18n import tr
 from .job import JobError
+from .preview import list_previews
 from .settings import AppConfig, Settings, save_config
+
+
+# -- preview ------------------------------------------------------------------
+
+
+class PreviewPanel(wx.Panel):
+    """Shows the SVG images pcb2gcode wrote: copper with tool paths, holes,
+    outline, solder mask and clearance problems, like pcb2gcodeGUI does."""
+
+    def __init__(self, parent: wx.Window):
+        super().__init__(parent)
+        self.entries: List[Tuple[str, str]] = []
+        self._svg: Any = None
+        self._cache: Optional[Tuple[Tuple[str, int, int], wx.Bitmap]] = None
+        self._path = ""
+
+        title = wx.StaticText(self, label=tr("Preview", "Vorschau"))
+        font = title.GetFont()
+        font.SetWeight(wx.FONTWEIGHT_BOLD)
+        title.SetFont(font)
+        self.choice = wx.Choice(self, choices=[])
+        self.btn_open = wx.Button(self, label="\u2197", size=wx.Size(36, -1))
+        self.btn_open.SetToolTip(tr("Open the image in the web browser", "Bild im Webbrowser öffnen"))
+        self.canvas = wx.Panel(self, style=wx.BORDER_SIMPLE)
+        self.canvas.SetBackgroundStyle(wx.BG_STYLE_PAINT)
+        self.canvas.SetMinSize(wx.Size(320, 240))
+
+        top = wx.BoxSizer(wx.HORIZONTAL)
+        top.Add(self.choice, 1, wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 6)
+        top.Add(self.btn_open, 0)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(title, 0, wx.BOTTOM, 6)
+        sizer.Add(top, 0, wx.EXPAND | wx.BOTTOM, 6)
+        sizer.Add(self.canvas, 1, wx.EXPAND)
+        self.SetSizer(sizer)
+
+        self.choice.Bind(wx.EVT_CHOICE, lambda evt: self._load())
+        self.btn_open.Bind(wx.EVT_BUTTON, self.on_open)
+        self.canvas.Bind(wx.EVT_PAINT, self.on_paint)
+        self.canvas.Bind(wx.EVT_SIZE, self.on_size)
+        self.show([])
+
+    def show(self, entries: List[Tuple[str, str]]) -> None:
+        """Replace the list of images; keeps the selected layer if it is still there."""
+        previous = self.choice.GetStringSelection() if self.entries else ""
+        self.entries = entries
+        self.choice.Clear()
+        for label, _ in entries:
+            self.choice.Append(label)
+        labels = [label for label, _ in entries]
+        if entries:
+            self.choice.SetSelection(labels.index(previous) if previous in labels else 0)
+        self.choice.Enable(bool(entries))
+        self.btn_open.Enable(bool(entries))
+        self._load()
+
+    def _load(self) -> None:
+        index = self.choice.GetSelection()
+        self._path = self.entries[index][1] if self.entries and index >= 0 else ""
+        self._svg = None
+        self._cache = None
+        if self._path and HAVE_SVG:
+            try:
+                self._svg = wx.svg.SVGimage.CreateFromFile(self._path)
+            except Exception:
+                self._svg = None
+        self.canvas.Refresh()
+
+    def _message(self) -> str:
+        if not self.entries:
+            return tr("No preview yet - it appears after generating.",
+                      "Noch keine Vorschau - sie erscheint nach dem Erzeugen.")
+        if not HAVE_SVG:
+            return tr("The preview needs wxPython 4.1 or newer.\nOpen the image with \u2197.",
+                      "Die Vorschau braucht wxPython 4.1 oder neuer.\nBild mit \u2197 öffnen.")
+        return tr("This image cannot be shown.", "Dieses Bild lässt sich nicht anzeigen.")
+
+    def on_size(self, event: wx.SizeEvent) -> None:
+        self.canvas.Refresh()
+        event.Skip()
+
+    def on_paint(self, event: wx.PaintEvent) -> None:
+        dc = wx.AutoBufferedPaintDC(self.canvas)
+        dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
+        dc.Clear()
+        width, height = self.canvas.GetClientSize()
+        svg = self._svg
+        if svg is not None and svg.width > 0 and svg.height > 0:
+            scale = min((width - 16) / svg.width, (height - 16) / svg.height)
+            w, h = int(svg.width * scale), int(svg.height * scale)
+            if w > 0 and h > 0:
+                key = (self._path, w, h)
+                if self._cache is None or self._cache[0] != key:
+                    self._cache = (key, svg.ConvertToScaledBitmap(wx.Size(w, h), self))
+                dc.DrawBitmap(self._cache[1], (width - w) // 2, (height - h) // 2)
+                return
+        dc.SetTextForeground(wx.Colour(120, 120, 120))
+        dc.DrawLabel(self._message(), wx.Rect(0, 0, width, height), wx.ALIGN_CENTER)
+
+    def on_open(self, event: wx.Event) -> None:
+        if self._path and os.path.isfile(self._path):
+            webbrowser.open(pathlib.Path(self._path).resolve().as_uri())
 
 
 # -- dialog -------------------------------------------------------------------
@@ -62,7 +174,11 @@ class Pcb2GcodeDialog(wx.Dialog):
         self.notebook = wx.Notebook(self)
         for title, rows in PAGES:
             self.notebook.AddPage(self._build_page(title, rows), label_text(title))
-        root.Add(self.notebook, 1, wx.LEFT | wx.RIGHT | wx.EXPAND, 8)
+        self.preview = PreviewPanel(self)
+        body = wx.BoxSizer(wx.HORIZONTAL)
+        body.Add(self.notebook, 3, wx.EXPAND)
+        body.Add(self.preview, 2, wx.EXPAND | wx.LEFT, 10)
+        root.Add(body, 1, wx.LEFT | wx.RIGHT | wx.EXPAND, 8)
 
         self.log_ctrl = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL, size=(-1, 150))
         self.log_ctrl.SetFont(wx.Font(wx.FontInfo(9).Family(wx.FONTFAMILY_TELETYPE)))
@@ -87,8 +203,8 @@ class Pcb2GcodeDialog(wx.Dialog):
         self.SetSizer(root)
         # Never narrower than the button row needs (German labels are long).
         best = self.GetBestSize()
-        self.SetMinSize(wx.Size(max(640, best.width), 600))
-        self.SetSize(wx.Size(max(780, best.width), 740))
+        self.SetMinSize(wx.Size(max(960, best.width), 640))
+        self.SetSize(wx.Size(max(1200, best.width), 780))
         self.CentreOnScreen()
 
         self.btn_generate.Bind(wx.EVT_BUTTON, self.on_generate)
@@ -100,6 +216,7 @@ class Pcb2GcodeDialog(wx.Dialog):
 
         self.set_form(settings)
         self._update_folder_button()
+        self._refresh_preview(settings)  # images of the last run, if any
         self._log(tr("Ready. kicad-pcb2gcode {}", "Bereit. kicad-pcb2gcode {}").format(__version__))
 
     # -- building -------------------------------------------------------
@@ -286,9 +403,16 @@ class Pcb2GcodeDialog(wx.Dialog):
 
         threading.Thread(target=work, daemon=True).start()
 
+    def _refresh_preview(self, settings: Settings) -> None:
+        try:
+            self.preview.show(list_previews(self.ctx.output_dir(settings)))
+        except OSError:
+            self.preview.show([])
+
     def _finished(self, output_dir: Optional[str], error: Optional[str], settings: Settings) -> None:
         self._set_running(False)
         self._update_folder_button()
+        self._refresh_preview(settings)
         if error:
             self._log("")
             self._log(tr("Error: ", "Fehler: ") + error)

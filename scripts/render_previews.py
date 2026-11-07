@@ -37,14 +37,21 @@ BOARD = "/home/user/projects/sensor-board/sensor-board.kicad_pcb"
 CSS = """
 * { box-sizing: border-box; }
 body { margin: 0; padding: 24px; background: #ffffff; font: 13px/1.35 "Cantarell", "Noto Sans", "DejaVu Sans", sans-serif; color: #2e3436; }
-.win { width: 780px; border: 1px solid #b6b6b3; border-radius: 8px 8px 4px 4px; background: #f6f5f4;
+.win { width: 1200px; border: 1px solid #b6b6b3; border-radius: 8px 8px 4px 4px; background: #f6f5f4;
        box-shadow: 0 6px 22px rgba(0,0,0,.28); overflow: hidden; }
 .title { height: 38px; background: #ebebeb; border-bottom: 1px solid #d5d0cc; display: flex; align-items: center;
          justify-content: center; font-weight: bold; position: relative; }
 .title .close { position: absolute; right: 10px; top: 8px; width: 22px; height: 22px; border-radius: 50%;
                 background: #dcdcdc; text-align: center; line-height: 22px; font-size: 12px; color: #444; }
 .path { padding: 8px 10px 6px; color: #2e3436; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.nb { margin: 0 8px; border: 1px solid #cdc7c2; border-radius: 3px; background: #ffffff; }
+.body { display: flex; gap: 10px; margin: 0 8px; align-items: stretch; }
+.nb { flex: 3; min-width: 0; border: 1px solid #cdc7c2; border-radius: 3px; background: #ffffff; }
+.pv { flex: 2; display: flex; flex-direction: column; min-width: 0; }
+.pv .t { font-weight: bold; margin-bottom: 6px; }
+.pv .row { display: flex; gap: 6px; margin-bottom: 6px; }
+.pv .row .combo { flex: 1; }
+.pv .canvas { flex: 1; min-height: 240px; border: 1px solid #b8b3ae; background: #fff; display: flex;
+              align-items: center; justify-content: center; color: #787878; text-align: center; padding: 12px; }
 .tabs { display: flex; background: #f6f5f4; border-bottom: 1px solid #cdc7c2; }
 .tab { padding: 7px 14px; color: #555753; border-bottom: 3px solid transparent; }
 .tab.on { color: #2e3436; border-bottom-color: #3584e4; background: #ffffff; }
@@ -139,9 +146,14 @@ def window_html(index: int, settings: Settings, log_lines, origin_hint: bool = F
     return (
         '<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head><body>'
         '<div class="win" id="win"><div class="title">pcb2gcode – sensor-board<span class="close">✕</span></div>'
-        '<div class="path">{path}</div>{hint}<div class="nb"><div class="tabs">{tabs}</div>{page}</div>'
+        '<div class="path">{path}</div>{hint}<div class="body"><div class="nb"><div class="tabs">{tabs}</div>{page}</div>'
+        '<div class="pv"><div class="t">{pv_title}</div><div class="row"><div class="combo off"></div>'
+        '<div class="browse off">\u2197</div></div><div class="canvas">{pv_msg}</div></div></div>'
         '<div class="log" style="height:{log_h}px">{log}</div><div class="buttons">{buttons}</div></div></body></html>'
     ).format(css=CSS, path=esc(BOARD), tabs=tabs,
+             pv_title=esc(tr("Preview", "Vorschau")),
+             pv_msg=esc(tr("No preview yet - it appears after generating.",
+                           "Noch keine Vorschau - sie erscheint nach dem Erzeugen.")),
              hint='<div class="origin">\u26a0 {}</div>'.format(esc(tr(
                  "Drill/place file origin is not set", "Bohr-/Platzierungsursprung ist nicht gesetzt")))
              if origin_hint else "", page=page_html(index, settings),
@@ -166,7 +178,7 @@ def shoot(html_text: str, target: str) -> None:
             fh.write(html_text)
         subprocess.run(
             [chrome(), "--headless=new", "--no-sandbox", "--disable-gpu", "--hide-scrollbars",
-             "--force-device-scale-factor=2", "--window-size=880,1400", "--screenshot=" + raw, "file://" + page],
+             "--force-device-scale-factor=2", "--window-size=1300,1400", "--screenshot=" + raw, "file://" + page],
             check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         img = Image.open(raw).convert("RGB")

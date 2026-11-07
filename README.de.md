@@ -77,6 +77,14 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
   an), siehe unten.
 * **Maschine** – G-Code-Dialekt und zusätzliche pcb2gcode-Optionen.
 
+Neben den Reitern zeigt eine **Vorschau** die Bilder, die pcb2gcode zeichnet,
+wie bei pcb2gcodeGUI: Kupfer mit Fräsbahnen je Seite, Bohrungen, Kontur,
+Lötstopp – und ganz oben Stellen, an denen der Abstand nicht eingehalten werden
+konnte. Sie füllt sich nach **G-Code erzeugen** und zeigt beim Öffnen des
+Fensters die Bilder des letzten Laufs. Die Bilder liegen in `gcode/preview/`;
+**↗** öffnet das gewählte im Webbrowser (nötig mit wxPython älter als 4.1, das
+kein SVG zeichnen kann).
+
 Gerber- und Bohrdateien werden relativ zu KiCads Bohr-/Platzierungsursprung
 exportiert (**Bohr-/Platzierungsursprung verwenden**, standardmäßig an – wie die
 gleichnamige Option im Plotten-Dialog von KiCad). Steht dieser Ursprung noch auf

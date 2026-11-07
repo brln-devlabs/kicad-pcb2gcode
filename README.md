@@ -54,15 +54,15 @@ Open a board, press the toolbar button, check the settings, press
 * **General** – which copper sides to mill (automatic, top, bottom, both),
   drilling and outline on/off, output folder, origin, safe and tool-change
   heights, path to pcb2gcode.
-* **Isolation** – V-bit (angle, tip width; the effective cutting width at the
-  chosen depth is calculated for you) or end mill, depth, feeds, isolation
-  width and overlap, Voronoi mode.
+* **Isolation** – available mill diameters (the width your tool cuts at the
+  milling depth, one or several), depth, feeds, isolation width, overlap
+  (percent or length), Voronoi mode – the same fields as in pcb2gcodeGUI.
 * **Drilling** – depth, feed, available drill sizes, milling large holes.
 * **Outline** – cutter, depth per pass, holding tabs.
 * **Machine** – G-code dialect switches and extra pcb2gcode options.
 
-The defaults suit a small GRBL router (3018 class) with a 30° V-bit and a
-1 mm end mill. **Always check the numbers against your tools and air-cut new
+The defaults suit a small GRBL router (3018 class) with a V-bit cutting
+0.15 mm wide at 0.08 mm depth and a 1 mm end mill. **Always check the numbers against your tools and air-cut new
 settings first.**
 
 ### Output

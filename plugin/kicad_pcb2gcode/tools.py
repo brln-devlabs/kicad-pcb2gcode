@@ -3,20 +3,8 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import List
-
-
-def vbit_width(tip: float, angle_deg: float, depth: float) -> float:
-    """Width a V-bit cuts at the copper surface.
-
-    ``depth`` may be passed as the (negative) ``zwork`` value; its magnitude is used.
-    width = tip + 2 * depth * tan(angle / 2)
-    """
-    if not 0 < angle_deg < 180:
-        raise ValueError("V-bit angle must be between 0 and 180 degrees")
-    if tip < 0:
-        raise ValueError("V-bit tip width must not be negative")
-    return tip + 2.0 * abs(depth) * math.tan(math.radians(angle_deg) / 2.0)
 
 
 def fmt(value) -> str:
@@ -53,3 +41,23 @@ def parse_diameter_list(text: str) -> List[float]:
             raise ValueError(item)
         result.append(value)
     return result
+
+
+_OVERLAP = re.compile(r"^([0-9]*\.?[0-9]+)\s*(%|mm|in)?$", re.IGNORECASE)
+
+
+def parse_overlap(text: str) -> str:
+    """Normalise a milling overlap for pcb2gcode.
+
+    Accepts a percentage of the tool width ("20%", or a bare "20") or a length
+    ("0.05mm", "0.002in"); a decimal comma is accepted too. Returns e.g. "20%"
+    or "0.05mm". Raises ValueError for anything else, or for 100 % and more.
+    """
+    m = _OVERLAP.match(text.strip().replace(",", "."))
+    if not m:
+        raise ValueError(text)
+    value = float(m.group(1))
+    unit = (m.group(2) or "%").lower()
+    if unit == "%" and value >= 100:
+        raise ValueError(text)
+    return fmt(value) + unit

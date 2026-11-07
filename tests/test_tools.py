@@ -1,22 +1,21 @@
-import math
-
 import pytest
 
-from kicad_pcb2gcode.tools import fmt, parse_diameter_list, vbit_width
+from kicad_pcb2gcode.tools import fmt, parse_diameter_list, parse_overlap
 
 
-def test_vbit_width_geometry():
-    # 30° V-bit, 0.1 mm tip, 0.08 mm deep: 0.1 + 2 * 0.08 * tan(15°)
-    expected = 0.1 + 2 * 0.08 * math.tan(math.radians(15))
-    assert vbit_width(0.1, 30, -0.08) == pytest.approx(expected)
-    assert vbit_width(0.1, 30, 0.08) == pytest.approx(expected)  # sign of depth irrelevant
-    assert vbit_width(0.0, 90, 0.1) == pytest.approx(0.2)
+@pytest.mark.parametrize(
+    "text, normalised",
+    [("20%", "20%"), ("20", "20%"), (" 12.5 % ", "12.5%"), ("0,05mm", "0.05mm"),
+     ("0.002IN", "0.002in"), ("0%", "0%"), ("12mm", "12mm")],
+)
+def test_parse_overlap(text, normalised):
+    assert parse_overlap(text) == normalised
 
 
-@pytest.mark.parametrize("tip, angle", [(0.1, 0), (0.1, 180), (-0.1, 30)])
-def test_vbit_width_rejects_nonsense(tip, angle):
+@pytest.mark.parametrize("text", ["", "100%", "150", "-5%", "abc", "5cm", "1.2.3"])
+def test_parse_overlap_rejects(text):
     with pytest.raises(ValueError):
-        vbit_width(tip, angle, 0.1)
+        parse_overlap(text)
 
 
 @pytest.mark.parametrize(

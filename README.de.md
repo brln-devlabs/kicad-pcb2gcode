@@ -55,15 +55,17 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
 * **Allgemein** – welche Kupferseiten gefräst werden (automatisch, oben,
   unten, beide), Bohren und Kontur an/aus, Ausgabeordner, Nullpunkt,
   Sicherheits- und Werkzeugwechselhöhe, Pfad zu pcb2gcode.
-* **Isolation** – V-Bit (Winkel, Spitzenbreite; die effektive Schnittbreite
-  bei der gewählten Tiefe wird berechnet) oder Schaftfräser, Tiefe, Vorschübe,
-  Isolationsbreite und Überlappung, Voronoi-Modus.
+* **Isolation** – verfügbare Fräserdurchmesser (die Breite, die dein
+  Werkzeug in der Frästiefe schneidet; einer oder mehrere), Tiefe,
+  Vorschübe, Isolationsbreite, Überlappung (Prozent oder Länge),
+  Voronoi-Modus – dieselben Felder wie in pcb2gcodeGUI.
 * **Bohren** – Tiefe, Vorschub, verfügbare Bohrergrößen, große Löcher fräsen.
 * **Kontur** – Fräser, Zustellung pro Durchgang, Haltestege.
 * **Maschine** – G-Code-Dialekt und zusätzliche pcb2gcode-Optionen.
 
 Die Voreinstellungen passen für eine kleine GRBL-Fräse (3018-Klasse) mit
-30°-V-Bit und 1-mm-Fräser. **Prüfe die Werte immer gegen deine Werkzeuge und
+einem V-Bit, das in 0,08 mm Tiefe 0,15 mm breit schneidet, und einem
+1-mm-Fräser. **Prüfe die Werte immer gegen deine Werkzeuge und
 fahre neue Einstellungen zuerst in der Luft ab.**
 
 ### Ausgabe

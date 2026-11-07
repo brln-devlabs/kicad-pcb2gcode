@@ -13,7 +13,7 @@ from typing import List, Optional, Tuple
 
 from . import __version__
 from .settings import Settings
-from .tools import fmt, parse_diameter_list, vbit_width
+from .tools import fmt, parse_diameter_list, parse_overlap
 
 
 @dataclass
@@ -34,11 +34,12 @@ class Inputs:
         return not (self.front or self.back or self.drill or self.outline)
 
 
-def mill_diameter(settings: Settings) -> float:
-    iso = settings.isolation
-    if iso.tool_type == "vbit":
-        return vbit_width(iso.vbit_tip, iso.vbit_angle, iso.zwork)
-    return iso.mill_diameter
+def mill_diameters(settings: Settings) -> List[float]:
+    """The isolation tool widths; raises ValueError if the field is not usable."""
+    sizes = parse_diameter_list(settings.isolation.mill_diameters)
+    if not sizes:
+        raise ValueError("no mill diameter")
+    return sizes
 
 
 def validate(settings: Settings, inputs: Inputs) -> List[str]:
@@ -55,14 +56,15 @@ def validate(settings: Settings, inputs: Inputs) -> List[str]:
         if iso.zwork >= 0:
             problems.append("zwork_negative")
         try:
-            if mill_diameter(settings) <= 0:
-                problems.append("mill_diameter_positive")
+            mill_diameters(settings)
         except ValueError:
-            problems.append("vbit_invalid")
+            problems.append("mill_diameters_invalid")
         if iso.mill_feed <= 0 or iso.mill_vertfeed <= 0:
             problems.append("feed_positive")
-        if not 0 <= iso.milling_overlap < 100:
-            problems.append("overlap_range")
+        try:
+            parse_overlap(iso.milling_overlap)
+        except ValueError:
+            problems.append("overlap_invalid")
         if iso.isolation_width < 0:
             problems.append("isolation_width_range")
     if inputs.drill:
@@ -133,16 +135,20 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
     if inputs.back:
         add("back", inputs.back)
     if inputs.mills:
+        sizes = mill_diameters(settings)
         add("zwork", iso.zwork)
-        add("mill-diameters", mill_diameter(settings))
+        add("mill-diameters", ",".join(fmt(d) for d in sizes))
         add("mill-feed", iso.mill_feed)
         add("mill-vertfeed", iso.mill_vertfeed)
         add("mill-speed", iso.mill_speed)
         if iso.isolation_width > 0:
             add("isolation-width", iso.isolation_width)
-            add("milling-overlap", fmt(iso.milling_overlap) + "%")
+        if iso.isolation_width > 0 or len(sizes) > 1:
+            add("milling-overlap", parse_overlap(iso.milling_overlap))
         if iso.voronoi:
             add("voronoi", True)
+            if not iso.preserve_thermal_reliefs:
+                add("preserve-thermal-reliefs", False)
         if iso.mill_feed_direction != "any":
             add("mill-feed-direction", iso.mill_feed_direction)
 

@@ -24,7 +24,7 @@ def test_invalid_and_unknown_values_fall_back():
     s = Settings.from_dict(
         {
             "general": {"sides": "sideways", "zsafe": "high", "export_drill": "no", "bogus": 1},
-            "isolation": {"zwork": "-0.05", "tool_type": "laser", "mill_speed": True},
+            "isolation": {"zwork": "-0.05", "milling_overlap": 30, "mill_speed": True, "vbit_angle": 30},
             "outline": {"bridgesnum": "3"},
             "drill": "not a dict",
             "unknown_section": {},
@@ -35,7 +35,7 @@ def test_invalid_and_unknown_values_fall_back():
     assert s.general.zsafe == d.general.zsafe
     assert s.general.export_drill is False
     assert s.isolation.zwork == -0.05
-    assert s.isolation.tool_type == "vbit"
+    assert s.isolation.milling_overlap == d.isolation.milling_overlap  # must be text
     assert s.isolation.mill_speed == d.isolation.mill_speed  # a bool is not a number
     assert s.outline.bridgesnum == 3
     assert s.drill == d.drill

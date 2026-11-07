@@ -28,7 +28,6 @@ BOARD_SETTINGS_SUFFIX = ".pcb2gcode.json"
 CONFIG_FILE_NAME = "config.json"
 
 SIDES = ("auto", "front", "back", "both")
-TOOL_TYPES = ("vbit", "endmill")
 SIDE_CHOICES = ("auto", "front", "back")
 FEED_DIRECTIONS = ("any", "climb", "conventional")
 
@@ -62,17 +61,17 @@ class MachineSettings:
 
 @dataclass
 class IsolationSettings:
-    tool_type: str = "vbit"  # vbit | endmill
-    vbit_angle: float = 30.0  # included angle in degrees
-    vbit_tip: float = 0.1  # tip width in mm
-    mill_diameter: float = 0.2  # used for end mills
+    # Width the tool cuts at the milling depth, as pcb2gcode's mill-diameters:
+    # one value, or several (comma separated) to clear wider areas with more tools.
+    mill_diameters: str = "0.15"
     zwork: float = -0.08
     mill_feed: float = 200.0
     mill_vertfeed: float = 50.0
     mill_speed: float = 10000.0
     isolation_width: float = 0.3  # 0 = a single pass around each trace
-    milling_overlap: float = 20.0  # percent
+    milling_overlap: str = "20%"  # percent of the tool width, or a length like "0.05mm"
     voronoi: bool = False
+    preserve_thermal_reliefs: bool = True  # Voronoi mode only
     mill_feed_direction: str = "any"
 
 
@@ -149,8 +148,6 @@ class Settings:
         g, i, d, o = self.general, self.isolation, self.drill, self.outline
         if g.sides not in SIDES:
             g.sides = "auto"
-        if i.tool_type not in TOOL_TYPES:
-            i.tool_type = "vbit"
         if i.mill_feed_direction not in FEED_DIRECTIONS:
             i.mill_feed_direction = "any"
         if d.drill_side not in SIDE_CHOICES:
@@ -159,6 +156,8 @@ class Settings:
             o.cut_side = "auto"
         g.output_subdir = g.output_subdir.strip() or "gcode"
         g.basename = g.basename.strip()
+        i.mill_diameters = i.mill_diameters.strip()
+        i.milling_overlap = i.milling_overlap.strip()
 
 
 def _coerce(value: Any, current: Any) -> Any:

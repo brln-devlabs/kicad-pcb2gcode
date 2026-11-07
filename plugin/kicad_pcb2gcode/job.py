@@ -32,7 +32,7 @@ from .export import (
     split_drill_files,
 )
 from .i18n import problem_text, tr
-from .millproject import Inputs, mill_diameter, render, validate
+from .millproject import Inputs, mill_diameters, render, validate
 from .settings import Settings
 
 Log = Callable[[str], None]
@@ -295,7 +295,8 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
         raise JobError("\n".join(problem_text(p) for p in problems))
 
     if inputs.mills:
-        log(tr("Effective tool width: {:.3f} mm", "Effektive Werkzeugbreite: {:.3f} mm").format(mill_diameter(req.settings)))
+        log(tr("Mill diameters: {} mm", "Fräserdurchmesser: {} mm").format(
+            ", ".join("{:g}".format(d) for d in mill_diameters(req.settings))))
 
     basename = basename_for(req)
     millproject_path = os.path.join(req.output_dir, "millproject")

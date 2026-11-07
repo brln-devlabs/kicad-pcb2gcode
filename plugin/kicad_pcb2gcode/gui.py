@@ -20,7 +20,6 @@ from .app import BoardContext, generate, open_folder
 from .i18n import tr
 from .job import JobError
 from .settings import AppConfig, Settings, save_config
-from .tools import vbit_width
 
 
 # -- form description ---------------------------------------------------------
@@ -82,13 +81,11 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
     ]),
     (("Isolation", "Isolation"), [
         Heading(("Tool", "Werkzeug")),
-        Field("isolation", "tool_type", ("Tool type", "Werkzeugtyp"), "choice", choices=(
-            ("vbit", ("V-bit (engraver)", "V-Bit (Gravierstichel)")),
-            ("endmill", ("End mill", "Schaftfräser")),
-        )),
-        Field("isolation", "vbit_angle", ("V-bit angle", "V-Bit-Winkel"), "float", "°"),
-        Field("isolation", "vbit_tip", ("V-bit tip width", "V-Bit-Spitzenbreite"), "float", "mm"),
-        Field("isolation", "mill_diameter", ("End mill diameter", "Fräserdurchmesser"), "float", "mm"),
+        Field("isolation", "mill_diameters", ("Available mill diameters", "Verfügbare Fräserdurchmesser"), "text", "mm",
+              tip=("Width the tool cuts at the milling depth. Several, comma separated (e.g. 0.15, 0.4), "
+                   "clear wider areas with additional tools.",
+                   "Breite, die das Werkzeug in der Frästiefe schneidet. Mehrere mit Komma getrennt "
+                   "(z. B. 0.15, 0.4) räumen breitere Bereiche mit weiteren Werkzeugen.")),
         Field("isolation", "zwork", ("Milling depth", "Frästiefe"), "float", "mm",
               tip=("Negative, e.g. -0.08", "Negativ, z. B. -0,08")),
         Heading(("Feeds and speeds", "Vorschub und Drehzahl")),
@@ -99,8 +96,11 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
         Field("isolation", "isolation_width", ("Isolation width", "Isolationsbreite"), "float", "mm",
               tip=("0 = a single pass. Larger values add passes for easier soldering.",
                    "0 = ein Durchgang. Größere Werte fügen Bahnen hinzu und erleichtern das Löten.")),
-        Field("isolation", "milling_overlap", ("Pass overlap", "Überlappung"), "float", "%"),
+        Field("isolation", "milling_overlap", ("Milling overlap", "Überlappung"), "text", "",
+              tip=("Percent of the tool width (20%) or a length (0.05mm).",
+                   "Prozent der Werkzeugbreite (20%) oder eine Länge (0.05mm).")),
         Field("isolation", "voronoi", ("Voronoi regions (keep most copper)", "Voronoi-Bereiche (maximal Kupfer behalten)"), "bool"),
+        Field("isolation", "preserve_thermal_reliefs", ("Preserve thermal reliefs (Voronoi)", "Wärmefallen erhalten (Voronoi)"), "bool"),
         Field("isolation", "mill_feed_direction", ("Milling direction", "Fräsrichtung"), "choice", choices=(
             ("any", ("Any (fastest)", "Beliebig (am schnellsten)")),
             ("climb", ("Climb", "Gleichlauf")),
@@ -238,8 +238,6 @@ class Pcb2GcodeDialog(wx.Dialog):
 
         if title[0] == "General":
             self._add_pcb2gcode_row(page, grid)
-        if title[0] == "Isolation":
-            self.width_label = wx.StaticText(page, label="")
 
         for row in rows:
             if isinstance(row, Heading):
@@ -252,10 +250,6 @@ class Pcb2GcodeDialog(wx.Dialog):
                 grid.AddSpacer(0)
                 continue
             self._add_field(page, grid, row)
-            if row.name == "zwork":
-                grid.Add(wx.StaticText(page, label=tr("Effective width", "Effektive Breite")), 0, wx.ALIGN_CENTER_VERTICAL)
-                grid.Add(self.width_label, 0, wx.ALIGN_CENTER_VERTICAL)
-                grid.Add(wx.StaticText(page, label="mm"), 0, wx.ALIGN_CENTER_VERTICAL)
 
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.Add(grid, 1, wx.ALL | wx.EXPAND, 10)
@@ -284,6 +278,7 @@ class Pcb2GcodeDialog(wx.Dialog):
         if field.kind == "bool":
             grid.AddSpacer(0)
             ctrl: wx.Window = wx.CheckBox(page, label=_t(field.label))
+            ctrl.Bind(wx.EVT_CHECKBOX, self.on_form_changed)
             grid.Add(ctrl, 0, wx.ALIGN_CENTER_VERTICAL)
             grid.AddSpacer(0)
         else:
@@ -347,26 +342,8 @@ class Pcb2GcodeDialog(wx.Dialog):
     def on_form_changed(self, event: Optional[wx.Event]) -> None:
         if event is not None:
             event.Skip()
-        ctrl_type = self.controls.get(("isolation", "tool_type"))
-        if ctrl_type is None:
-            return
-        is_vbit = ctrl_type[1].GetSelection() <= 0
-        for name in ("vbit_angle", "vbit_tip"):
-            self.controls[("isolation", name)][1].Enable(is_vbit)
-        self.controls[("isolation", "mill_diameter")][1].Enable(not is_vbit)
-        try:
-            depth = _parse_number(self.controls[("isolation", "zwork")][1].GetValue())
-            if is_vbit:
-                width = vbit_width(
-                    _parse_number(self.controls[("isolation", "vbit_tip")][1].GetValue()),
-                    _parse_number(self.controls[("isolation", "vbit_angle")][1].GetValue()),
-                    depth,
-                )
-            else:
-                width = _parse_number(self.controls[("isolation", "mill_diameter")][1].GetValue())
-            self.width_label.SetLabel("{:.3f}".format(width))
-        except ValueError:
-            self.width_label.SetLabel("–")
+        voronoi = self.controls[("isolation", "voronoi")][1].GetValue()
+        self.controls[("isolation", "preserve_thermal_reliefs")][1].Enable(bool(voronoi))
 
     # -- actions ----------------------------------------------------------
 

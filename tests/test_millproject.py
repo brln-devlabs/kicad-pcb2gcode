@@ -1,6 +1,6 @@
 import pytest
 
-from kicad_pcb2gcode.millproject import Inputs, build_options, mill_diameter, render, validate
+from kicad_pcb2gcode.millproject import Inputs, build_options, mill_diameters, render, validate
 from kicad_pcb2gcode.settings import Settings
 
 ALL = Inputs(front="cam/front.gbr", back="cam/back.gbr", drill="cam/drill.drl", outline="cam/outline.gbr")
@@ -27,7 +27,7 @@ def test_inputs_and_sections():
     assert opts["drill"] == "cam/drill.drl"
     assert opts["outline"] == "cam/outline.gbr"
     assert opts["zwork"] == "-0.08"
-    assert opts["mill-diameters"] == "0.14287"  # 30° V-bit, 0.1 tip, 0.08 deep
+    assert opts["mill-diameters"] == "0.15"
     assert opts["isolation-width"] == "0.3"
     assert opts["milling-overlap"] == "20%"
     assert opts["fill-outline"] == "true"
@@ -45,16 +45,32 @@ def test_sections_are_omitted_without_inputs():
         assert key not in opts
 
 
-def test_end_mill_and_single_pass():
+def test_single_pass():
     s = Settings()
-    s.isolation.tool_type = "endmill"
-    s.isolation.mill_diameter = 0.2
     s.isolation.isolation_width = 0
     opts = options(s)
-    assert opts["mill-diameters"] == "0.2"
+    assert opts["mill-diameters"] == "0.15"
     assert "isolation-width" not in opts
     assert "milling-overlap" not in opts
-    assert mill_diameter(s) == 0.2
+
+
+def test_several_mill_diameters_and_length_overlap():
+    s = Settings()
+    s.isolation.mill_diameters = "0.15, 0.4mm"
+    s.isolation.isolation_width = 0
+    s.isolation.milling_overlap = "0,05 mm"
+    opts = options(s)
+    assert mill_diameters(s) == [0.15, 0.4]
+    assert opts["mill-diameters"] == "0.15,0.4"
+    assert opts["milling-overlap"] == "0.05mm"  # several tools need the overlap
+
+
+def test_thermal_reliefs_only_matter_with_voronoi():
+    s = Settings()
+    s.isolation.preserve_thermal_reliefs = False
+    assert "preserve-thermal-reliefs" not in options(s)
+    s.isolation.voronoi = True
+    assert options(s)["preserve-thermal-reliefs"] == "false"
 
 
 def test_optional_drill_options():
@@ -113,8 +129,9 @@ def test_validate_accepts_defaults():
     [
         (lambda s: setattr(s.isolation, "zwork", 0.1), "zwork_negative"),
         (lambda s: setattr(s.general, "zsafe", 0), "zsafe_positive"),
-        (lambda s: setattr(s.isolation, "vbit_angle", 0), "vbit_invalid"),
-        (lambda s: setattr(s.isolation, "milling_overlap", 100), "overlap_range"),
+        (lambda s: setattr(s.isolation, "mill_diameters", ""), "mill_diameters_invalid"),
+        (lambda s: setattr(s.isolation, "mill_diameters", "0.15, x"), "mill_diameters_invalid"),
+        (lambda s: setattr(s.isolation, "milling_overlap", "100%"), "overlap_invalid"),
         (lambda s: setattr(s.drill, "zdrill", 1), "zdrill_negative"),
         (lambda s: setattr(s.drill, "drills_available", "x"), "drills_available_invalid"),
         (lambda s: setattr(s.outline, "zcut", 0), "zcut_negative"),

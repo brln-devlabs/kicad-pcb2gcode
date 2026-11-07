@@ -74,6 +74,12 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
   an), siehe unten.
 * **Maschine** – G-Code-Dialekt und zusätzliche pcb2gcode-Optionen.
 
+Steht KiCads Bohr-/Platzierungsursprung noch auf 0/0, weist ein kleiner
+Hinweis unter dem Dateinamen darauf hin (Details per Mauszeiger), und das
+Protokoll wiederholt ihn. Mit **Platinenecke auf X0/Y0** hängt der G-Code nicht
+von diesem Ursprung ab; er zählt nur, wenn **Bohr-/Platzierungsursprung
+verwenden** an und die Platinenecke aus ist.
+
 Die Voreinstellungen stammen aus einer bewährten pcb2gcodeGUI-Einstellung
 für eine GRBL-Fräse mit 24 000 1/min: ein Gravierstichel, der in 0,25 mm Tiefe
 0,154 mm breit schneidet (2 mm Isolationsbreite, 0,1 mm zusätzlicher

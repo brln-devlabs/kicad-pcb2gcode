@@ -72,6 +72,11 @@ Open a board, press the toolbar button, check the settings, press
   see below.
 * **Machine** – G-code dialect switches and extra pcb2gcode options.
 
+If KiCad's drill/place file origin is still at 0/0, a small note under the
+file name says so (hover it for details) and the log repeats it. With
+**Board corner at X0/Y0** the G-code does not depend on that origin; it only
+matters with **Use drill/place file origin** on and the board corner off.
+
 The defaults come from a proven pcb2gcodeGUI setup on a GRBL machine with a
 24 000 rpm spindle: an engraving bit cutting 0.154 mm wide at 0.25 mm depth
 (2 mm isolation width, 0.1 mm extra offset), one drill size, a 1.5 mm end mill

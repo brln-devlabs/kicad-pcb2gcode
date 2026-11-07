@@ -69,6 +69,7 @@ body { margin: 0; padding: 24px; background: #ffffff; font: 13px/1.35 "Cantarell
 .btn { white-space: nowrap; border: 1px solid #cdc7c2; border-radius: 5px; background: linear-gradient(#fafafa, #ececea); padding: 5px 12px; }
 .btn.default { background: #3584e4; color: #fff; border-color: #1c71d8; }
 .spacer { flex: 1; }
+.origin { padding: 0 10px 6px; color: #b07800; font-size: 12px; }
 .caption { margin-top: 10px; color: #77767b; font-size: 12px; }
 """
 
@@ -125,7 +126,7 @@ def page_html(index: int, settings: Settings) -> str:
     return '<div class="page">{}</div>'.format("".join(parts))
 
 
-def window_html(index: int, settings: Settings, log_lines) -> str:
+def window_html(index: int, settings: Settings, log_lines, origin_hint: bool = False) -> str:
     tabs = "".join('<div class="tab{}">{}</div>'.format(" on" if i == index else "", esc(label_text(t)))
                    for i, (t, _) in enumerate(PAGES))
     tr = i18n.tr
@@ -138,9 +139,12 @@ def window_html(index: int, settings: Settings, log_lines) -> str:
     return (
         '<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head><body>'
         '<div class="win" id="win"><div class="title">pcb2gcode – sensor-board<span class="close">✕</span></div>'
-        '<div class="path">{path}</div><div class="nb"><div class="tabs">{tabs}</div>{page}</div>'
+        '<div class="path">{path}</div>{hint}<div class="nb"><div class="tabs">{tabs}</div>{page}</div>'
         '<div class="log" style="height:{log_h}px">{log}</div><div class="buttons">{buttons}</div></div></body></html>'
-    ).format(css=CSS, path=esc(BOARD), tabs=tabs, page=page_html(index, settings),
+    ).format(css=CSS, path=esc(BOARD), tabs=tabs,
+             hint='<div class="origin">\u26a0 {}</div>'.format(esc(tr(
+                 "Drill/place file origin is not set", "Bohr-/Platzierungsursprung ist nicht gesetzt")))
+             if origin_hint else "", page=page_html(index, settings),
              log=esc("\n".join(log_lines)), log_h=max(150, 17 * len(log_lines) + 14), buttons=buttons)
 
 
@@ -203,7 +207,7 @@ def render(lang: str) -> None:
     os.makedirs(OUT, exist_ok=True)
     for name, index, settings, log_lines in shots:
         target = os.path.join(OUT, "dialog-{}-{}.png".format(name, lang))
-        shoot(window_html(index, settings, log_lines), target)
+        shoot(window_html(index, settings, log_lines, origin_hint=(name == "general")), target)
         print(os.path.relpath(target, ROOT))
 
 

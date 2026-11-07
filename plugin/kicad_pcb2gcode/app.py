@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from . import __version__
+from .boardfile import drill_origin, read_board
 from .export import find_kicad_cli, find_pcb2gcode
 from .i18n import tr
 from .job import CAM_SUBDIR, JobError, JobRequest, JobResult, Log, run_job
@@ -30,6 +31,21 @@ class BoardContext:
         if os.path.isabs(sub):
             return sub
         return os.path.join(os.path.dirname(os.path.abspath(self.board_path)), sub)
+
+    def drill_origin_set(self) -> Optional[bool]:
+        """Is KiCad's drill/place file origin set (away from 0/0)? Asks the
+        running KiCad first, then reads the saved board. None if unknown."""
+        if self.session is not None:
+            try:
+                answer = self.session.drill_origin_set()  # type: ignore[attr-defined]
+            except Exception:
+                answer = None
+            if answer is not None:
+                return answer
+        text = read_board(self.board_path)
+        if not text:
+            return None
+        return drill_origin(text) is not None
 
     def board_to_export(self, settings: Settings, log: Log) -> str:
         """The file kicad-cli should read: a fresh copy of the open board when
@@ -74,9 +90,33 @@ def generate(ctx: BoardContext, settings: Settings, cfg: AppConfig, log: Log) ->
         log(tr("Settings saved to {}", "Einstellungen gespeichert in {}").format(os.path.basename(path)))
     except OSError as exc:
         log(tr("Warning: could not save settings: {}", "Warnung: Einstellungen nicht gespeichert: {}").format(exc))
+    if ctx.drill_origin_set() is False:
+        log(drill_origin_hint(settings))
     req = build_request(ctx, settings, cfg, log)
     log(tr("Output folder: {}", "Ausgabeordner: {}").format(req.output_dir))
     return run_job(req, log)
+
+
+def drill_origin_hint(settings: Settings) -> str:
+    """One-line note that the drill/place origin is not set."""
+    text = tr("Note: the drill/place file origin is not set (it is at 0/0).",
+              "Hinweis: Der Bohr-/Platzierungsursprung ist nicht gesetzt (liegt bei 0/0).")
+    g = settings.general
+    if g.use_aux_origin and not (g.zero_start or g.frame_mode):
+        text += " " + tr("Coordinates are measured from the sheet corner.",
+                         "Koordinaten beziehen sich auf die Blattecke.")
+    return text
+
+
+def drill_origin_tip() -> str:
+    return tr(
+        "Set it in KiCad with Place > Drill/Place File Origin. It matters when 'Use drill/place file "
+        "origin' is on and 'Board corner at X0/Y0' is off; with the board corner at X0/Y0 the G-code "
+        "does not depend on it.",
+        "Setzen in KiCad über Platzieren > Bohr-/Platzierungsursprung. Er zählt, wenn "
+        "'Bohr-/Platzierungsursprung verwenden' an und 'Platinenecke auf X0/Y0' aus ist; mit der "
+        "Platinenecke auf X0/Y0 hängt der G-Code nicht davon ab.",
+    )
 
 
 def open_folder(path: str) -> None:

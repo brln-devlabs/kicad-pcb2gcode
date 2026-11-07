@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import wx
 
 from . import __version__
-from .app import BoardContext, generate, open_folder
+from .app import BoardContext, drill_origin_tip, generate, open_folder
 from .form import PAGES, Field, Heading, Row, format_number, parse_number, label_text
 from .i18n import tr
 from .job import JobError
@@ -43,7 +43,21 @@ class Pcb2GcodeDialog(wx.Dialog):
 
         header = wx.StaticText(self, label=ctx.board_path)
         header.SetToolTip(ctx.board_path)
-        root.Add(header, 0, wx.ALL | wx.EXPAND, 8)
+        root.Add(header, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 8)
+
+        # Subtle note, not a dialog: the drill/place origin is still at 0/0.
+        self.origin_hint: Optional[wx.StaticText] = None
+        if ctx.drill_origin_set() is False:
+            hint = wx.StaticText(self, label="\u26a0 " + tr(
+                "Drill/place file origin is not set", "Bohr-/Platzierungsursprung ist nicht gesetzt"))
+            font = hint.GetFont()
+            font.SetPointSize(max(font.GetPointSize() - 1, 7))
+            hint.SetFont(font)
+            hint.SetForegroundColour(wx.Colour(176, 120, 0))
+            hint.SetToolTip(drill_origin_tip())
+            root.Add(hint, 0, wx.LEFT | wx.RIGHT | wx.TOP, 8)
+            self.origin_hint = hint
+        root.AddSpacer(8)
 
         self.notebook = wx.Notebook(self)
         for title, rows in PAGES:

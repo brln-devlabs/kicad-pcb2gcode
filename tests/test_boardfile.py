@@ -68,3 +68,11 @@ def test_split_drill_files(tmp_path):
     # without knowing the board name the shortest name is the through-hole file
     merged, _ = split_drill_files(str(tmp_path))
     assert merged.endswith("b.drl")
+
+
+def test_drill_origin():
+    from kicad_pcb2gcode.boardfile import drill_origin
+
+    assert drill_origin(TWO_LAYER) is None  # KiCad leaves the entry out at 0/0
+    assert drill_origin("(setup (aux_axis_origin 0 0))") is None
+    assert drill_origin("(setup\n\t\t(aux_axis_origin 100.5 -80.25)\n\t)") == (100.5, -80.25)

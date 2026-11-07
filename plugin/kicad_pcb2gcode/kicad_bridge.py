@@ -34,6 +34,15 @@ class KiCadSession:
     def project_dir(self) -> str:
         return os.path.dirname(self.board_path)
 
+    def drill_origin_set(self) -> Optional[bool]:
+        """Whether the drill/place file origin is away from 0/0, as KiCad has it
+        right now (unsaved changes included). None if the API cannot tell."""
+        try:
+            origin = self.board.get_origin(2)  # BoardOriginType.BOT_DRILL
+            return not (int(origin.x) == 0 and int(origin.y) == 0)
+        except Exception:
+            return None
+
     def save_copy(self, target: str) -> bool:
         """Ask KiCad to write the open board, unsaved edits included, to ``target``.
 

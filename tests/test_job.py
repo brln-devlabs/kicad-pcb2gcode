@@ -309,3 +309,45 @@ def test_invalid_mask_settings_are_reported_as_such(board):
     s.mask.zwork = 0.1
     with pytest.raises(JobError, match="Solder mask: Milling depth must be below zero"):
         run_job(request(board, s), lambda line: None)
+
+
+class OriginSession:
+    def __init__(self, answer):
+        self.answer = answer
+
+    def drill_origin_set(self):
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+    def save_copy(self, target):
+        return False
+
+
+def test_drill_origin_from_kicad_or_board_file(board):
+    ctx = BoardContext(board_path=board)
+    assert ctx.drill_origin_set() is False  # board file without aux_axis_origin
+    with open(board, "w") as fh:
+        fh.write("(kicad_pcb (setup (aux_axis_origin 50 60)))")
+    assert ctx.drill_origin_set() is True
+    # the running KiCad wins over the saved file (unsaved changes) ...
+    assert BoardContext(board_path=board, session=OriginSession(False)).drill_origin_set() is False
+    # ... unless the API cannot answer
+    assert BoardContext(board_path=board, session=OriginSession(None)).drill_origin_set() is True
+    assert BoardContext(board_path=board, session=OriginSession(RuntimeError())).drill_origin_set() is True
+    assert BoardContext(board_path=board + ".missing").drill_origin_set() is None
+
+
+def test_unset_drill_origin_is_noted_in_the_log(board):
+    ctx = BoardContext(board_path=board, kicad_cli=fake("kicad-cli"))
+    cfg = AppConfig(pcb2gcode_path=fake("pcb2gcode"))
+    log = []
+    generate(ctx, Settings(), cfg, log.append)
+    assert any("drill/place file origin is not set" in line for line in log)
+    assert not any("sheet corner" in line for line in log)  # irrelevant with the board corner at X0/Y0
+    s = Settings()
+    s.general.use_aux_origin = True
+    s.general.zero_start = False
+    log = []
+    generate(ctx, s, cfg, log.append)
+    assert any("measured from the sheet corner" in line for line in log)

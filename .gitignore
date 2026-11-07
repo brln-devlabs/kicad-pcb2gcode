@@ -4,3 +4,6 @@ __pycache__/
 dist/
 *.egg-info/
 .venv/
+tests/e2e/dense.kicad_pcb
+tests/e2e/gcode/
+tests/e2e/*.pcb2gcode.json

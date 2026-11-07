@@ -41,12 +41,24 @@ jobs:
         working-directory: plugin
         run: |
           set -x
-          for board in rounded rect; do
+          python3 ../tests/e2e/make_dense.py
+          for board in rounded rect dense; do
             python3 -m kicad_pcb2gcode "../tests/e2e/$board.kicad_pcb" --lang en || true
             ls -l "../tests/e2e/gcode" || true
             mkdir -p "../out/$board"
             cp -r ../tests/e2e/gcode/. "../out/$board/" || true
             rm -rf ../tests/e2e/gcode
+          done
+      - name: Settings window and preview (real wxPython under Xvfb)
+        run: |
+          sudo apt-get install -y python3-wxgtk4.0 xvfb
+          for board in rounded dense; do
+            xvfb-run -a -s "-screen 0 1600x1000x24" /usr/bin/python3 tests/e2e/gui_check.py "tests/e2e/$board.kicad_pcb" "out/gui-$board"
+            rm -rf tests/e2e/gcode
+          done
+          # snapshots as text, to look at them without downloading the artifact
+          for f in out/gui-dense/preview_00_fit.png out/gui-dense/preview_00_zoom.png; do
+            [ -f "$f" ] && { echo "PNG $f"; base64 -w0 "$f"; echo; }
           done
       - uses: actions/upload-artifact@v5
         if: always()
@@ -58,7 +70,7 @@ jobs:
           python3 - <<'PY'
           import glob, os, sys
           ok = True
-          for board in ("rounded", "rect"):
+          for board in ("rounded", "rect", "dense"):
               files = sorted(os.path.basename(p) for p in glob.glob(f"out/{board}/*.ngc"))
               print(board, files)
               for want in ("back", "drill", "outline", "mask_front", "mask_back"):

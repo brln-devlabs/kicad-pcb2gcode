@@ -337,9 +337,13 @@ class PreviewPanel(wx.Panel):
 
     def on_paint(self, event: wx.PaintEvent) -> None:
         dc = wx.AutoBufferedPaintDC(self.canvas)
+        width, height = self.canvas.GetClientSize()
+        self.draw(dc, width, height)
+
+    def draw(self, dc: wx.DC, width: int, height: int) -> None:
+        """Paint the current view onto ``dc`` (the window, or a bitmap)."""
         dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
         dc.Clear()
-        width, height = self.canvas.GetClientSize()
         if not self._has_image():
             dc.SetTextForeground(wx.Colour(120, 120, 120))
             dc.DrawLabel(self._message(), wx.Rect(0, 0, width, height), wx.ALIGN_CENTER)

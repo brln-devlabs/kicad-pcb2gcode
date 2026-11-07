@@ -109,7 +109,7 @@ for index, (label, path) in enumerate(panel.entries):
     w, h = panel.canvas.GetClientSize()
     first = snapshot("preview_{:02d}_fit".format(index))
     heavy = panel._heavy
-    prefetch = idle_until_done() if heavy else 0.0
+    prefetch = idle_until_done()
     rest = paint_ms()
     # glide in by 4 notches; one idle step between frames, as in the event loop
     panel.on_wheel(NS(GetPosition=lambda: (w // 3, h // 2), GetWheelRotation=lambda: 480, GetWheelDelta=lambda: 120))
@@ -127,8 +127,7 @@ for index, (label, path) in enumerate(panel.entries):
         ev.more = False
         panel.on_idle(ev)
     settle = snapshot("preview_{:02d}_zoom".format(index))
-    if heavy:
-        idle_until_done()
+    idle_until_done()
     panel.on_press(NS(GetPosition=lambda: (200, 200)))
     drags = []
     for k in range(20):

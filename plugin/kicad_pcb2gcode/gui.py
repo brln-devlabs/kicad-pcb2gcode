@@ -581,21 +581,44 @@ class PreviewPanel(wx.Panel):
                 keys += self._pyramid_keys(lv, (cx - hw, cy - hh, cx + hw, cy + hh))
         return keys
 
+    def _lod_wanted(self, near: bool) -> List[int]:
+        """Levels of detail to prepare: around the current zoom first (a glide
+        crossing into an unprepared level would stall), then the rest."""
+        k = self._scene.level_for(self._scale)
+        order = [k, k + 1, k - 1, k + 2]
+        if not near:
+            order += list(range(vector.LEVELS + 1))
+        return [lv for lv in order if 0 <= lv <= vector.LEVELS and not self._scene.has_level(lv)]
+
     def on_idle(self, event: wx.IdleEvent) -> None:
-        if not self._heavy or self._scene is None or not self._has_image():
+        """Prepare ahead while nothing else happens: levels of detail, then tiles."""
+        if self._scene is None or not self._has_image():
             return
-        end = time.perf_counter() + self.IDLE_BUDGET_MS / 1000.0
-        rendered = False
-        for key in self._wanted():
-            if key in self._tiles:
-                continue
-            if time.perf_counter() >= end:
+        busy = self._anim.IsRunning() or self._drag is not None
+        if not busy:
+            levels = self._lod_wanted(near=True)
+            if levels:
+                self._scene.level(levels[0])
                 event.RequestMore()
-                break
-            self._render_key(key)
-            rendered = True
-        if rendered:
-            self._redraw()
+                return
+        if self._heavy:
+            end = time.perf_counter() + self.IDLE_BUDGET_MS / 1000.0
+            rendered = False
+            for key in self._wanted():
+                if key in self._tiles:
+                    continue
+                if time.perf_counter() >= end:
+                    event.RequestMore()
+                    return
+                self._render_key(key)
+                rendered = True
+            if rendered:
+                self._redraw()
+        if not busy:
+            levels = self._lod_wanted(near=False)
+            if levels:
+                self._scene.level(levels[0])
+                event.RequestMore()
 
     def on_open(self, event: wx.Event) -> None:
         if self._path and os.path.isfile(self._path):

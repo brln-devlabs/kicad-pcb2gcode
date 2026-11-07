@@ -17,6 +17,15 @@ Ein Klick auf den Toolbar-Button öffnet ein Einstellungsfenster.
 3. schreibt eine `millproject`-Datei und startet pcb2gcode,
 4. legt den G-Code im Ordner `gcode/` neben dem Board ab.
 
+<p>
+  <img src="docs/images/dialog-general-de.png" width="49%" alt="Einstellungsfenster, Reiter Allgemein">
+  <img src="docs/images/dialog-isolation-de.png" width="49%" alt="Einstellungsfenster, Reiter Isolation">
+</p>
+
+<sub>Vorschau, gezeichnet aus den Felddefinitionen des Dialogs mit
+<code>scripts/render_previews.py</code>. Das echte Fenster sieht je nach
+Betriebssystem etwas anders aus.</sub>
+
 ## Voraussetzungen
 
 | | |
@@ -106,10 +115,13 @@ Unterseite in den negativen X-Bereich.
 
 #### Wenderahmen
 
+![Wenderahmen: Oberseite fräsen und bohren, Platine im Rahmen links/rechts wenden, Unterseite fräsen](docs/images/flip-frame-de.svg)
+
 Für doppelseitige Platinen ohne Passstifte: Einen Rahmen (oder eine
 ausgefräste Tasche) genau in der Größe der Platinenkontur auf der Maschine
 befestigen und X0/Y0 auf seine linke untere Ecke setzen. Den Rohling auf
-dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen**
+dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen** (Reiter
+**Doppelseitig**)
 
 * wird die Kontur nicht gefräst (der Rohling hat schon seine Endgröße),
 * werden alle Löcher von oben gebohrt, vor dem Wenden,
@@ -121,6 +133,8 @@ dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen**
 3. Platine im Rahmen links/rechts wenden – Nullpunkt bleibt
 4. board_back.ngc    Unterseite
 ```
+
+<img src="docs/images/dialog-double-sided-de.png" width="60%" alt="Reiter Doppelseitig mit dem Ablauf im Protokoll">
 
 Bei nicht rechteckigen Platinen hat der Rahmen die Größe des umschließenden
 Rechtecks der Kontur. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
@@ -182,6 +196,8 @@ python -m pip install pytest
 python -m pytest            # Unit-Tests und ein kompletter Lauf mit Test-Doubles
 python scripts/install.py --link   # Arbeitskopie per Symlink in KiCad einbinden
 python scripts/package.py          # Release-Zip bauen
+python scripts/render_previews.py  # Dialog-Vorschauen neu zeichnen (braucht Chrome und Pillow)
+python scripts/flip_frame_svg.py   # Wenderahmen-Skizze neu zeichnen
 ```
 
 Der Code liegt in `plugin/kicad_pcb2gcode/`: `settings` (Modell und JSON),

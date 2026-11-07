@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="350" viewBox="0 0 820 350" font-family="Noto Sans, DejaVu Sans, Helvetica, Arial, sans-serif">
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0969da"/></marker></defs>
+<rect width="820" height="350" fill="#ffffff"/>
+<rect x="20" y="50" width="240" height="190" rx="4" fill="#d9d4cc" stroke="#8a8378" stroke-width="2"/>
+<rect x="40" y="70" width="200" height="150" fill="#2f6b3a" stroke="#1d3d22" stroke-width="1.5"/>
+<line x1="70" y1="110" x2="150" y2="110" stroke="#c87533" stroke-width="7" stroke-linecap="round"/>
+<line x1="150" y1="110" x2="190" y2="150" stroke="#c87533" stroke-width="7" stroke-linecap="round"/>
+<line x1="80" y1="180" x2="200" y2="180" stroke="#c87533" stroke-width="7" stroke-linecap="round"/>
+<circle cx="70" cy="110" r="7" fill="#c87533"/><circle cx="70" cy="110" r="2.6" fill="#f4f1ea"/>
+<circle cx="190" cy="150" r="7" fill="#c87533"/><circle cx="190" cy="150" r="2.6" fill="#f4f1ea"/>
+<circle cx="80" cy="180" r="7" fill="#c87533"/><circle cx="80" cy="180" r="2.6" fill="#f4f1ea"/>
+<circle cx="200" cy="180" r="7" fill="#c87533"/><circle cx="200" cy="180" r="2.6" fill="#f4f1ea"/>
+<circle cx="160" cy="140" r="7" fill="#c87533"/><circle cx="160" cy="140" r="2.6" fill="#f4f1ea"/>
+<circle cx="52" cy="82" r="5" fill="#f4f1ea" stroke="#1d3d22"/>
+<text x="184.0" y="210" text-anchor="middle" font-size="12" fill="#e8f3e6">Oberseite (F.Cu)</text>
+<line x1="40" y1="220" x2="68" y2="220" stroke="#d1242f" stroke-width="2"/>
+<line x1="40" y1="220" x2="40" y2="192" stroke="#d1242f" stroke-width="2"/>
+<circle cx="40" cy="220" r="4" fill="#d1242f"/>
+<text x="38" y="254" font-size="12" fill="#d1242f" font-weight="bold">X0/Y0</text>
+<text x="140.0" y="36" text-anchor="middle" font-size="15" font-weight="bold" fill="#24292f">1  Oberseite + Bohren</text>
+<rect x="560" y="50" width="240" height="190" rx="4" fill="#d9d4cc" stroke="#8a8378" stroke-width="2"/>
+<rect x="580" y="70" width="200" height="150" fill="#24552d" stroke="#1d3d22" stroke-width="1.5"/>
+<line x1="750" y1="110" x2="740" y2="180" stroke="#b06a2c" stroke-width="7" stroke-linecap="round"/>
+<line x1="660" y1="140" x2="630" y2="150" stroke="#b06a2c" stroke-width="7" stroke-linecap="round"/>
+<circle cx="750" cy="110" r="7" fill="#b06a2c"/><circle cx="750" cy="110" r="2.6" fill="#f4f1ea"/>
+<circle cx="630" cy="150" r="7" fill="#b06a2c"/><circle cx="630" cy="150" r="2.6" fill="#f4f1ea"/>
+<circle cx="740" cy="180" r="7" fill="#b06a2c"/><circle cx="740" cy="180" r="2.6" fill="#f4f1ea"/>
+<circle cx="620" cy="180" r="7" fill="#b06a2c"/><circle cx="620" cy="180" r="2.6" fill="#f4f1ea"/>
+<circle cx="660" cy="140" r="7" fill="#b06a2c"/><circle cx="660" cy="140" r="2.6" fill="#f4f1ea"/>
+<circle cx="768" cy="82" r="5" fill="#f4f1ea" stroke="#1d3d22"/>
+<text x="724.0" y="210" text-anchor="middle" font-size="12" fill="#e8f3e6">Unterseite (B.Cu)</text>
+<line x1="580" y1="220" x2="608" y2="220" stroke="#d1242f" stroke-width="2"/>
+<line x1="580" y1="220" x2="580" y2="192" stroke="#d1242f" stroke-width="2"/>
+<circle cx="580" cy="220" r="4" fill="#d1242f"/>
+<text x="578" y="254" font-size="12" fill="#d1242f" font-weight="bold">X0/Y0</text>
+<text x="680.0" y="36" text-anchor="middle" font-size="15" font-weight="bold" fill="#24292f">3  Unterseite</text>
+<line x1="140.0" y1="52" x2="140.0" y2="238" stroke="#0969da" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="145.0" y="64" font-size="11" fill="#0969da">Mittelachse</text>
+<path d="M 340.0 155 C 380.0 90, 440.0 90, 480.0 155" fill="none" stroke="#0969da" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="410.0" y="70" text-anchor="middle" font-size="15" font-weight="bold" fill="#24292f">2  Links/rechts wenden</text>
+<text x="410.0" y="190" text-anchor="middle" font-size="12" fill="#57606a">Nullpunkt bleibt</text>
+<text x="140.0" y="282" text-anchor="middle" font-size="12" fill="#57606a" font-family="DejaVu Sans Mono, monospace">board_front.ngc, board_drill.ngc</text>
+<text x="680.0" y="282" text-anchor="middle" font-size="12" fill="#57606a" font-family="DejaVu Sans Mono, monospace">board_back.ngc</text>
+<text x="680.0" y="302" text-anchor="middle" font-size="11" fill="#57606a">Rahmen = Platinengröße</text>
+</svg>

@@ -16,6 +16,15 @@ then
 3. writes a `millproject` file and runs pcb2gcode,
 4. leaves the G-code in a `gcode/` folder next to the board.
 
+<p>
+  <img src="docs/images/dialog-general-en.png" width="49%" alt="Settings window, General tab">
+  <img src="docs/images/dialog-isolation-en.png" width="49%" alt="Settings window, Isolation tab">
+</p>
+
+<sub>Previews drawn from the dialog's own field definitions with
+<code>scripts/render_previews.py</code>. The real window follows your
+operating system's look.</sub>
+
 ## Requirements
 
 | | |
@@ -100,10 +109,12 @@ of one cutter diameter and mirrors the bottom into negative X.
 
 #### Flip frame
 
+![Flip frame: mill the top and drill, turn the board over left/right in the frame, mill the bottom](docs/images/flip-frame-en.svg)
+
 For double-sided boards without alignment pins: fix a frame (or mill a
 pocket) with exactly the size of the board outline on the machine and set
 X0/Y0 to its lower-left corner. Cut the blank to the same size. With
-**Mill in a flip frame** the plugin
+**Mill in a flip frame** (tab **Double-sided**) the plugin
 
 * does not cut the outline (the blank already has its final size),
 * drills all holes from the top, before turning over,
@@ -116,6 +127,8 @@ X0/Y0 to its lower-left corner. Cut the blank to the same size. With
 3. turn the board over left/right in the frame – keep the origin
 4. board_back.ngc    bottom side
 ```
+
+<img src="docs/images/dialog-double-sided-en.png" width="60%" alt="Double-sided tab with the order of work in the log">
 
 For non-rectangular boards the frame has the size of the outline's bounding
 rectangle. The alignment follows pcb2gcode's coordinate formulas, which
@@ -174,6 +187,8 @@ python -m pip install pytest
 python -m pytest            # unit tests and an end-to-end run with fake tools
 python scripts/install.py --link   # symlink the working copy into KiCad
 python scripts/package.py          # build the release zip
+python scripts/render_previews.py  # redraw the dialog previews (needs Chrome and Pillow)
+python scripts/flip_frame_svg.py   # redraw the flip-frame sketch
 ```
 
 The code lives in `plugin/kicad_pcb2gcode/`: `settings` (model and JSON),

@@ -313,6 +313,7 @@ def test_solder_mask_run(board):
     copper = read_options(result.millproject_path)
     mask = read_options(os.path.join(result.output_dir, "millproject_mask"))
     assert mask["invert-gerbers"] == "true"
+    assert mask["eulerian-paths"] == "false"  # no gain for the rings, but most of the run time
     assert mask["front"] == "cam/mask_front.gbr" and mask["back"] == "cam/mask_back.gbr"
     assert mask["basename"] == "my_board_mask"
     assert mask["zwork"] == "-0.03" and mask["mill-diameters"] == "0.1"
@@ -321,7 +322,7 @@ def test_solder_mask_run(board):
         assert key not in mask
     for key in ("x-offset", "y-offset", "mirror-axis", "zsafe", "nog64", "nom6"):  # same placement and dialect
         assert mask[key] == copper[key], key
-    assert "invert-gerbers" not in copper
+    assert "invert-gerbers" not in copper and "eulerian-paths" not in copper
 
 
 def test_solder_mask_can_be_switched_off(board):

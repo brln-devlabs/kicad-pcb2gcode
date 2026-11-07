@@ -266,6 +266,16 @@ python -m kicad_pcb2gcode pfad/zum/board.kicad_pcb [--sides back] [--no-outline]
 * **Kein Fenster** – ohne wxPython läuft das Plugin mit den gespeicherten
   Einstellungen und schreibt `gcode/kicad-pcb2gcode.log`. wxPython
   installieren (Linux: `python3-wxgtk4.0`).
+* **pcb2gcode braucht lange** – das Protokoll zeigt, wie lange jeder Lauf
+  gedauert hat. Bei Kupferflächen ist die Isolationsbreite der größte Hebel:
+  Jeder zusätzliche Durchgang ist eine Geometrie-Operation auf der ganzen
+  Fläche, die Fläche lässt aber nur den Zonenabstand frei – eine breitere
+  Isolation fräst dort kaum mehr. Bei 1 mm Zonenabstand brauchte der
+  Kupferlauf einer Testplatine mit 0,5–1 mm statt 2 mm 17–40 s statt 53 s bei
+  fast gleichem Fräsbild; das Protokoll weist darauf hin. Der Lötstopp-Lauf
+  schaltet pcb2gcodes Wegverknüpfung (`eulerian-paths`) ab, die dort für die
+  Ringe nichts spart, aber die meiste Zeit kostete (87 s → 17 s auf derselben
+  Platine).
 * **pcb2gcode lehnt eine Option ab** – dein pcb2gcode ist älter als 2.5.
   Aktualisieren oder die Option (z. B. *Kein M6*) im Reiter **Maschine**
   abwählen: abgewählte Optionen werden gar nicht erst geschrieben.

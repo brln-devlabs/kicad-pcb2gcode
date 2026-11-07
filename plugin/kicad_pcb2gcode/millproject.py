@@ -215,6 +215,10 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
             add("milling-overlap", parse_overlap(iso.milling_overlap))
         if inputs.invert:
             add("invert-gerbers", True)
+            # The openings are cleared in closed rings that never share a
+            # path, so joining paths (on by default) saves no milling - but
+            # it takes most of pcb2gcode's time for this run.
+            add("eulerian-paths", False)
         if iso.voronoi:
             add("voronoi", True)
             if not iso.preserve_thermal_reliefs:

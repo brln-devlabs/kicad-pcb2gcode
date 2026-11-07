@@ -252,6 +252,15 @@ python -m kicad_pcb2gcode path/to/board.kicad_pcb [--sides back] [--no-outline] 
 * **Nothing happens / no window** – without wxPython the plugin runs with the
   saved settings and writes `gcode/kicad-pcb2gcode.log`. Install wxPython
   (Linux: `python3-wxgtk4.0`).
+* **pcb2gcode takes long** – the log shows how long each run took. With
+  copper pours, the isolation width is the main lever: every extra pass is a
+  geometry operation on the whole pour, but the pour leaves gaps of only the
+  zone clearance, so a wider isolation mills hardly more. With 1 mm zone
+  clearance, 0.5–1 mm instead of 2 mm cut the copper run on a test board from
+  53 s to 17–40 s with nearly the same milling; the log points this out. The
+  solder mask run turns off pcb2gcode's path joining (`eulerian-paths`), which
+  saves nothing for the rings there but took most of its time (87 s → 17 s on
+  the same board).
 * **pcb2gcode rejects an option** – your pcb2gcode is older than 2.5. Update
   it, or untick the option (e.g. *No M6*) in the **Machine** tab: switched-off
   options are not written at all.

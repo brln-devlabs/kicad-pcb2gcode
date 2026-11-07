@@ -47,14 +47,10 @@ def run(base, label, change, drop=()):
 print("main run settings:", dict(options("millproject")))
 copper_only = {"basename": "bench", "drill": None, "outline": None}
 run("millproject", "copper, as configured (isolation width 2 mm)", dict(copper_only))
-run("millproject", "copper, 2 mm, tsp-2opt off", dict(copper_only, **{"tsp-2opt": "false"}))
+run("millproject", "copper, isolation width 1 mm", dict(copper_only, **{"isolation-width": "1"}))
+run("millproject", "copper, isolation width 0.5 mm", dict(copper_only, **{"isolation-width": "0.5"}))
 run("millproject", "copper, 2 mm, eulerian-paths off", dict(copper_only, **{"eulerian-paths": "false"}))
-run("millproject", "copper, 2 mm, path-finding-limit 0", dict(copper_only, **{"path-finding-limit": "0"}))
-run("millproject", "copper, 0.5 mm, tsp-2opt off", dict(copper_only, **{"tsp-2opt": "false", "isolation-width": "0.5"}))
 if os.path.exists(os.path.join(out, "millproject_mask")):
     print("mask run settings:", dict(options("millproject_mask")))
     run("millproject_mask", "solder mask, as configured", {"basename": "bench"})
-    run("millproject_mask", "solder mask, tsp-2opt off", {"basename": "bench", "tsp-2opt": "false"})
-    run("millproject_mask", "solder mask, eulerian-paths off", {"basename": "bench", "eulerian-paths": "false"})
-    run("millproject_mask", "solder mask, path-finding-limit 0", {"basename": "bench", "path-finding-limit": "0"})
-    run("millproject_mask", "solder mask, no invert (outline around the openings)", {"basename": "bench", "invert-gerbers": None, "isolation-width": "0"})
+    run("millproject_mask", "solder mask, eulerian-paths on", {"basename": "bench", "eulerian-paths": None})

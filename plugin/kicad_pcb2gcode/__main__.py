@@ -33,7 +33,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--holes", choices=("merged", "separate", "pth", "npth"),
                    help="PTH and NPTH in one drill file, in two, or only one kind")
     p.add_argument("--frame", action="store_true",
-                   help="flip frame: corner at X0/Y0, drill from the top, cut the outline last")
+                   help="flip frame: corner at X0/Y0, drill from the top, outline cut first")
     p.add_argument("--flip", choices=("leftright", "topbottom"), help="axis the board is turned over about")
     p.add_argument("--outer-layers-only", action="store_true",
                    help="mill F.Cu/B.Cu even if inner copper layers carry copper")

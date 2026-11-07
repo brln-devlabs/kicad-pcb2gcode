@@ -212,8 +212,8 @@ def render(lang: str) -> None:
     files = ["sensor-board_front.ngc", "sensor-board_drill.ngc", "sensor-board_back.ngc",
              "sensor-board_mask_back.ngc", "sensor-board_mask_front.ngc", "sensor-board_outline.ngc"]
     log = [tr("Board outline: {:.3f} x {:.3f} mm", "Platinenkontur: {:.3f} x {:.3f} mm").format(box.width, box.height),
-           tr("Flip frame: the outline is cut last, with the top side up.",
-              "Wenderahmen: Die Kontur wird zum Schluss gefräst, mit der Oberseite oben."), ""]
+           tr("Flip frame: the outline is cut first, from the top, before the board goes into the frame.",
+              "Wenderahmen: Die Kontur wird zuerst von oben gefräst, bevor die Platine in den Rahmen kommt."), ""]
     log += frame_steps(files, Inputs(board_box=box, cut_side="front"), "leftright")
     shots.append(("double-sided", titles.index("Double-sided"), frame, log))
 

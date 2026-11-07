@@ -43,7 +43,7 @@ jobs:
         run: |
           set -x
           python3 ../tests/e2e/make_dense.py
-          # flip frame: outline cut last
+          # flip frame: outline cut first, from the top
           python3 -m kicad_pcb2gcode ../tests/e2e/rect.kicad_pcb --frame --sides both --lang en || true
           mkdir -p ../out/frame && cp -r ../tests/e2e/gcode/. ../out/frame/ && rm -rf ../tests/e2e/gcode
           rm -f ../tests/e2e/rect.pcb2gcode.json

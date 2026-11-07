@@ -165,34 +165,33 @@ Unterseite in den negativen X-Bereich.
 
 Für doppelseitige Platinen ohne Passstifte: Einen Rahmen (oder eine
 ausgefräste Tasche) genau in der Größe der Platinenkontur auf der Maschine
-befestigen und X0/Y0 auf seine linke untere Ecke setzen. Den Rohling auf
-dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen** (Reiter
+befestigen und X0/Y0 auf seine linke untere Ecke setzen. Mit **Im
+Wenderahmen fräsen** (Reiter
 **Doppelseitig**)
 
 * werden alle Löcher von oben gebohrt, vor dem Wenden,
-* wird die Kontur zum Schluss gefräst, von der Seite, die dann oben liegt
-  (kein zusätzliches Wenden; abschaltbar mit **Kontur ausfräsen**),
+* wird die Kontur zuerst von oben aus einem größeren Rohling gefräst – bevor
+  die Platine in den Rahmen kommt (Häkchen **Kontur ausfräsen** weg, wenn der
+  Rohling schon seine Endgröße hat),
 * steht der Ablauf im Protokoll und in `gcode/ABLAUF.txt`:
 
 ```
-1. board_front.ngc   Oberseite
-2. board_drill.ngc   Bohren
-3. Platine im Rahmen links/rechts wenden – Nullpunkt bleibt
-4. board_back.ngc    Unterseite
-5. Lötstopplack auftragen und aushärten, Platine zurück in den Rahmen (Unterseite oben)
-6. board_mask_back.ngc
-7. Platine wenden – Nullpunkt bleibt
-8. board_mask_front.ngc
-9. board_outline.ngc  Kontur ausfräsen, Oberseite oben
+1. board_outline.ngc  Kontur ausfräsen – vor dem Wenderahmen
+2. Platine in den Rahmen legen, Oberseite oben
+3. board_front.ngc   Oberseite
+4. board_drill.ngc   Bohren
+5. Platine im Rahmen links/rechts wenden – Nullpunkt bleibt
+6. board_back.ngc    Unterseite
+7. Lötstopplack auftragen und aushärten, Platine zurück in den Rahmen (Unterseite oben)
+8. board_mask_back.ngc
+9. Platine wenden – Nullpunkt bleibt
+10. board_mask_front.ngc
 ```
 
 <img src="docs/images/dialog-double-sided-de.png" width="60%" alt="Reiter Doppelseitig mit dem Ablauf im Protokoll">
 
 Bei nicht rechteckigen Platinen hat der Rahmen die Größe des umschließenden
-Rechtecks der Kontur. Der Konturfräser läuft außen an der Konturlinie entlang,
-also direkt an der Rahmenkante: Bei einem Rahmen genau in Platinengröße fräst
-er um einen Fräserdurchmesser in den Rahmenrand – den Rahmen deshalb aus
-Opfermaterial machen oder die Haltestege nutzen. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
+Rechtecks der Kontur. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
 `tests/test_placement.py` nachbildet; trotzdem zuerst an einem Reststück
 prüfen.
 

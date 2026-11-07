@@ -156,34 +156,33 @@ of one cutter diameter and mirrors the bottom into negative X.
 
 For double-sided boards without alignment pins: fix a frame (or mill a
 pocket) with exactly the size of the board outline on the machine and set
-X0/Y0 to its lower-left corner. Cut the blank to the same size. With
+X0/Y0 to its lower-left corner. With
 **Mill in a flip frame** (tab **Double-sided**) the plugin
 
 * drills all holes from the top, before turning over,
-* cuts the outline last, from the side facing up by then (no extra turn;
-  untick **Cut board outline** to skip it),
+* cuts the outline first, from the top, out of a larger blank – before the
+  board goes into the frame (untick **Cut board outline** if the blank
+  already has its final size),
 * writes the order of work to the log and to `gcode/STEPS.txt`
   (`ABLAUF.txt` in German):
 
 ```
-1. board_front.ngc   top side
-2. board_drill.ngc   drill
-3. turn the board over left/right in the frame – keep the origin
-4. board_back.ngc    bottom side
-5. apply and cure the solder mask, board back into the frame (bottom up)
-6. board_mask_back.ngc
-7. turn the board over – keep the origin
-8. board_mask_front.ngc
-9. board_outline.ngc  cut the outline, top side up
+1. board_outline.ngc  cut the outline – before the flip frame
+2. put the board into the frame, top side up
+3. board_front.ngc   top side
+4. board_drill.ngc   drill
+5. turn the board over left/right in the frame – keep the origin
+6. board_back.ngc    bottom side
+7. apply and cure the solder mask, board back into the frame (bottom up)
+8. board_mask_back.ngc
+9. turn the board over – keep the origin
+10. board_mask_front.ngc
 ```
 
 <img src="docs/images/dialog-double-sided-en.png" width="60%" alt="Double-sided tab with the order of work in the log">
 
 For non-rectangular boards the frame has the size of the outline's bounding
-rectangle. The outline cutter runs just outside the outline line, that is
-right along the frame edge: in a frame of exactly the board size it cuts one
-cutter diameter into the frame wall, so make the frame from sacrificial
-material or rely on the holding tabs. The alignment follows pcb2gcode's coordinate formulas, which
+rectangle. The alignment follows pcb2gcode's coordinate formulas, which
 `tests/test_placement.py` reproduces; still verify on a scrap piece first.
 
 ### Solder mask

@@ -248,47 +248,34 @@ def test_flip_frame(board):
                      "my_board_mask_back.ngc", "my_board_mask_front.ngc", "my_board_outline.ngc"]
     millproject = open(result.millproject_path).read()
     assert "outline=cam/outline.gbr" in millproject
-    assert "cut-side=front" in millproject  # the top is up after the last mask step
+    assert "cut-side=front" in millproject  # cut out first, top side up
     assert "drill-side=front" in millproject
     assert "x-offset=0" in millproject and "mirror-axis=5" in millproject  # fake outline 10 x 10 mm
     steps = open(os.path.join(result.output_dir, "STEPS.txt")).read().splitlines()
     order = [line.split(".", 1)[1].strip() for line in steps if line.strip()[:2].rstrip(".").isdigit()]
-    assert order[0].startswith("my_board_front.ngc")
-    assert order[1].startswith("my_board_drill.ngc")
-    assert order[2].startswith("Turn the board over left/right")
-    assert order[3].startswith("my_board_back.ngc")
-    assert order[4].startswith("Apply and cure the solder mask") and "(bottom up)" in order[4]
-    assert order[5].startswith("my_board_mask_back.ngc")
-    assert order[6].startswith("Turn the board over left/right")
-    assert order[7].startswith("my_board_mask_front.ngc")
-    assert order[8] == "my_board_outline.ngc  (cut the outline, top side up)"
-    assert len(order) == 9
+    assert order[0] == "my_board_outline.ngc  (cut the outline, top side up - before the flip frame)"
+    assert order[1].startswith("Put the board (10.00 x 10.00 mm) into the frame, top side up")
+    assert order[2].startswith("my_board_front.ngc")
+    assert order[3].startswith("my_board_drill.ngc")
+    assert order[4].startswith("Turn the board over left/right")
+    assert order[5].startswith("my_board_back.ngc")
+    assert order[6].startswith("Apply and cure the solder mask") and "(bottom up)" in order[6]
+    assert order[7].startswith("my_board_mask_back.ngc")
+    assert order[8].startswith("Turn the board over left/right")
+    assert order[9].startswith("my_board_mask_front.ngc")
+    assert len(order) == 10
     assert any("Board outline: 10.000 x 10.000 mm" in line for line in log)
-    assert any("outline is cut last, with the top side up" in line for line in log)
+    assert any("outline is cut first, from the top" in line for line in log)
 
 
-def test_flip_frame_outline_side_follows_the_last_step(board):
-    from kicad_pcb2gcode.job import frame_final_side
-    from kicad_pcb2gcode.millproject import Inputs
-
-    both = Inputs(front="f", back="b")
-    assert frame_final_side(both, None) == "back"
-    assert frame_final_side(Inputs(front="f"), None) == "front"
-    assert frame_final_side(Inputs(back="b"), None) == "back"
-    assert frame_final_side(both, Inputs(front="mf", back="mb")) == "front"
-    assert frame_final_side(both, Inputs(front="mf")) == "front"
-    assert frame_final_side(both, Inputs(back="mb")) == "back"
-    assert frame_final_side(Inputs(front="f"), Inputs(front="mf", back="mb")) == "back"
-
+def test_flip_frame_outline_is_cut_from_the_top(board):
     s = Settings()
     s.general.frame_mode = True
     s.general.sides = "both"
+    s.outline.cut_side = "back"  # ignored in the frame
     s.mask.enabled = False
     result = run_job(request(board, s), lambda line: None)
-    assert "cut-side=back" in open(result.millproject_path).read()
-    steps = open(os.path.join(result.output_dir, "STEPS.txt")).read().splitlines()
-    assert steps[-2].strip().startswith("4. my_board_back.ngc")
-    assert steps[-1].strip() == "5. my_board_outline.ngc  (cut the outline, bottom side up)"
+    assert "cut-side=front" in open(result.millproject_path).read()
 
 
 def test_flip_frame_without_outline_cut(board):
@@ -299,6 +286,8 @@ def test_flip_frame_without_outline_cut(board):
     millproject = open(result.millproject_path).read()
     assert "outline=" not in millproject and "x-offset=" in millproject
     assert not any(f.endswith("_outline.ngc") for f in result.files)
+    steps = open(os.path.join(result.output_dir, "STEPS.txt")).read()
+    assert "Blank 10.00 x 10.00 mm in the frame" in steps
 
 
 def test_outline_defines_origin_even_when_not_cut(board):

@@ -330,33 +330,13 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Dict[str, O
             mask_inputs = None
 
     if g.frame_mode and inputs.outline:
-        inputs.cut_side = frame_final_side(inputs, mask_inputs)
-        log(tr("Flip frame: the outline is cut last, with the {} up.",
-               "Wenderahmen: Die Kontur wird zum Schluss gefräst, mit der {} oben.").format(_side_name(inputs.cut_side)))
+        # The outline comes first: the board is cut out of the blank, from the
+        # top, before it goes into the frame.
+        inputs.cut_side = "front"
+        log(tr("Flip frame: the outline is cut first, from the top, before the board goes into the frame.",
+               "Wenderahmen: Die Kontur wird zuerst von oben gefräst, bevor die Platine in den Rahmen kommt."))
 
     return inputs, chosen, {"npth": npth_inputs, "mask": mask_inputs}
-
-
-def _side_name(side: str) -> str:
-    return tr("top side", "Oberseite") if side == "front" else tr("bottom side", "Unterseite")
-
-
-def _mask_order(inputs: Inputs, mask_inputs: Optional[Inputs]) -> List[str]:
-    """Mask sides in flip-frame order: the board comes back into the frame
-    the way it left the machine, so after milling the bottom it starts there."""
-    if mask_inputs is None:
-        return []
-    order = ["back", "front"] if inputs.back else ["front", "back"]
-    return [side for side in order if getattr(mask_inputs, side)]
-
-
-def frame_final_side(inputs: Inputs, mask_inputs: Optional[Inputs]) -> str:
-    """Side facing up in the flip frame after copper, holes and solder mask -
-    the outline is cut from there, so the board is not turned once more."""
-    masks = _mask_order(inputs, mask_inputs)
-    if masks:
-        return masks[-1]
-    return "back" if inputs.back else "front"
 
 
 def _job_name(path: str) -> str:
@@ -371,7 +351,8 @@ def _job_name(path: str) -> str:
 def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
     """Operator instructions for the flip frame, in machining order.
 
-    Copper and holes first. The solder mask is applied afterwards; the board
+    The outline is cut first, out of a larger blank, before the board goes
+    into the frame. Then copper and holes. The solder mask is applied afterwards; the board
     goes back into the frame with the bottom up (as it came off the machine),
     the bottom openings are milled, the board is turned and the top openings
     follow."""
@@ -381,13 +362,22 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
     flip = (tr("left/right (about the vertical centre line)", "links/rechts (um die senkrechte Mittelachse)")
             if flip_axis == "leftright" else
             tr("top/bottom (about the horizontal centre line)", "oben/unten (um die waagerechte Mittelachse)"))
-    lines = [
-        tr("Flip frame - order of work:", "Wenderahmen - Ablauf:"),
-        tr("  Blank {} in the frame, origin X0/Y0 = lower-left corner of the frame.",
-           "  Rohling {} in den Rahmen, Nullpunkt X0/Y0 = linke untere Rahmenecke.").format(size),
-    ]
-    first = [j for j in ("front", "drill", "milldrill", "npth_drill", "npth_milldrill") if j in by_job]
+    lines = [tr("Flip frame - order of work:", "Wenderahmen - Ablauf:")]
     n = 1
+    if "outline" in by_job:
+        # cut the board out of the blank first, then it goes into the frame
+        lines.append("  {}. {}  ({})".format(n, by_job["outline"], tr(
+            "cut the outline, top side up - before the flip frame",
+            "Kontur ausfräsen, Oberseite oben - vor dem Wenderahmen")))
+        n += 1
+        lines.append("  {}. {}".format(n, tr(
+            "Put the board ({}) into the frame, top side up; origin X0/Y0 = lower-left corner of the frame.",
+            "Platine ({}) in den Rahmen legen, Oberseite oben; Nullpunkt X0/Y0 = linke untere Rahmenecke.").format(size)))
+        n += 1
+    else:
+        lines.append(tr("  Blank {} in the frame, origin X0/Y0 = lower-left corner of the frame.",
+                        "  Rohling {} in den Rahmen, Nullpunkt X0/Y0 = linke untere Rahmenecke.").format(size))
+    first = [j for j in ("front", "drill", "milldrill", "npth_drill", "npth_milldrill") if j in by_job]
     split = "npth_drill" in by_job or "npth_milldrill" in by_job
     for job in first:
         label = {"front": tr("top side", "Oberseite"),
@@ -403,7 +393,6 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
         n += 1
         lines.append("  {}. {}  ({})".format(n, by_job["back"], tr("bottom side", "Unterseite")))
         n += 1
-    up = "back" if "back" in by_job else "front"
     if "mask_front" in by_job or "mask_back" in by_job:
         bottom_up = "back" in by_job
         order = ["mask_back", "mask_front"] if bottom_up else ["mask_front", "mask_back"]
@@ -416,7 +405,6 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
             "Lötstopplack auftragen und aushärten, Platine wieder in den Rahmen ({} oben).").format(
                 tr("bottom", "Unterseite") if first_up == "back" else tr("top", "Oberseite"))))
         n += 1
-        up = present[-1].split("_", 1)[1]
         for i, job in enumerate(present):
             if i == 1:
                 lines.append("  {}. {}".format(n, tr("Turn the board over {} - keep the origin.",
@@ -424,15 +412,6 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
                 n += 1
             lines.append("  {}. {}  ({})".format(n, by_job[job], labels[job]))
             n += 1
-    if "outline" in by_job:
-        side = inputs.cut_side or up
-        if side != up:  # only when the files were made differently
-            lines.append("  {}. {}".format(n, tr("Turn the board over {} - keep the origin.",
-                                                "Platine {} wenden - Nullpunkt bleibt.").format(flip)))
-            n += 1
-        lines.append("  {}. {}  ({})".format(n, by_job["outline"], tr(
-            "cut the outline, {} up", "Kontur ausfräsen, {} oben").format(_side_name(side))))
-        n += 1
     return lines
 
 

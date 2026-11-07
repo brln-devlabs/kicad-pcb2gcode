@@ -93,10 +93,10 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
         Field("general", "frame_mode", ("Mill in a flip frame", "Im Wenderahmen fräsen"), "bool",
               tip=("A frame with exactly the size of the board outline is fixed on the machine, its lower-left "
                    "corner is X0/Y0. The pre-cut blank is milled on top, drilled, turned over inside the frame "
-                   "and milled on the bottom. The outline is cut last, from the side facing up by then.",
+                   "and milled on the bottom. The outline is cut first, before the board goes into the frame.",
                    "Ein Rahmen genau in der Größe der Platinenkontur ist auf der Maschine befestigt, seine linke "
                    "untere Ecke ist X0/Y0. Der zugeschnittene Rohling wird oben gefräst, gebohrt, im Rahmen "
-                   "gewendet und unten gefräst. Die Kontur wird zum Schluss gefräst, von der Seite, die dann oben liegt.")),
+                   "gewendet und unten gefräst. Die Kontur wird zuerst gefräst, bevor die Platine in den Rahmen kommt.")),
     ]),
     (("Isolation", "Isolation"), [
         Heading(("Tool", "Werkzeug")),

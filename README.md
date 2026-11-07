@@ -95,6 +95,18 @@ With **Both sides** pcb2gcode mirrors the bottom layer. Alignment between the
 two sides depends on your fixture; drill alignment holes and verify on scrap
 before milling a real board.
 
+### Boards with more than two copper layers
+
+Isolation milling can only make the top and bottom side. Before exporting,
+the plugin checks the layer stack:
+
+* inner layers that carry tracks or zones stop the job with a message. Tick
+  **Mill outer layers only** (General tab) to mill `F.Cu`/`B.Cu` anyway; the
+  connections on the inner layers will then be missing;
+* empty inner layers only give a note in the log;
+* blind, buried and micro vias always stop the job, since they cannot be
+  made by drilling.
+
 ## Settings files
 
 * Per board: `<board>.pcb2gcode.json` next to the board, written on every run.

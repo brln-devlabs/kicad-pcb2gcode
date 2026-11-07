@@ -98,6 +98,18 @@ Bei **Beide Seiten** spiegelt pcb2gcode die Unterseite. Wie genau beide Seiten
 zueinander passen, hängt von deiner Aufspannung ab. Bohre Passlöcher und teste
 an einem Reststück, bevor du eine echte Platine fräst.
 
+### Boards mit mehr als zwei Kupferlagen
+
+Isolationsfräsen kann nur Ober- und Unterseite herstellen. Vor dem Export
+prüft das Plugin den Lagenaufbau:
+
+* Innenlagen mit Leiterbahnen oder Flächen brechen den Lauf mit einer Meldung
+  ab. Mit **Nur Außenlagen fräsen** (Reiter Allgemein) werden `F.Cu`/`B.Cu`
+  trotzdem gefräst; die Verbindungen auf den Innenlagen fehlen dann.
+* Leere Innenlagen ergeben nur einen Hinweis im Protokoll.
+* Blind-, Buried- und Micro-Vias brechen immer ab, weil sie sich nicht bohren
+  lassen.
+
 ## Einstellungsdateien
 
 * Pro Board: `<board>.pcb2gcode.json` neben dem Board, bei jedem Lauf

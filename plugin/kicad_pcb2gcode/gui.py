@@ -60,6 +60,12 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
         Field("general", "include_unsaved", ("Include unsaved changes", "Ungespeicherte Änderungen einbeziehen"), "bool",
               tip=("Exports a copy of the board as currently open in KiCad.",
                    "Exportiert eine Kopie des Boards, wie es gerade in KiCad geöffnet ist.")),
+        Field("general", "outer_layers_only", ("Mill outer layers only (ignore inner layers)",
+                                               "Nur Außenlagen fräsen (Innenlagen ignorieren)"), "bool",
+              tip=("For boards with more than two copper layers: mill F.Cu/B.Cu anyway. "
+                   "Connections on inner layers will be missing.",
+                   "Für Boards mit mehr als zwei Kupferlagen: trotzdem F.Cu/B.Cu fräsen. "
+                   "Verbindungen auf Innenlagen fehlen dann.")),
         Heading(("Output", "Ausgabe")),
         Field("general", "output_subdir", ("Output folder", "Ausgabeordner"), "text",
               tip=("Relative to the board file, or an absolute path.", "Relativ zur Board-Datei oder absoluter Pfad.")),

@@ -71,13 +71,29 @@ def drill_command(kicad_cli: str, board: str, output_dir: str, use_aux_origin: b
     ]
 
 
-def find_drill_file(output_dir: str) -> Optional[str]:
-    """The merged drill file kicad-cli wrote (``<board>.drl``)."""
+def find_drill_file(output_dir: str, board: Optional[str] = None) -> Optional[str]:
+    """The drill file with the through holes (``<board>.drl``)."""
+    merged, _ = split_drill_files(output_dir, board)
+    return merged
+
+
+def split_drill_files(output_dir: str, board: Optional[str] = None) -> "tuple[Optional[str], List[str]]":
+    """Split kicad-cli's drill output into the through-hole file and the rest.
+
+    KiCad writes ``<board>.drl`` for through holes and one extra file per
+    layer pair (``<board>-F_Cu-In1_Cu.drl`` and similar) for blind, buried
+    and micro vias. Extra files mean the board cannot be made by milling.
+    """
     files = sorted(glob.glob(os.path.join(output_dir, "*.drl")))
-    merged = [f for f in files if not f.endswith(("-NPTH.drl", "-PTH.drl"))]
-    if merged:
-        return merged[0]
-    return files[0] if files else None
+    if not files:
+        return None, []
+    if board:
+        exact = os.path.join(output_dir, os.path.splitext(os.path.basename(board))[0] + ".drl")
+        if exact in files:
+            return exact, [f for f in files if f != exact]
+    plain = [f for f in files if not f.endswith(("-NPTH.drl", "-PTH.drl"))]
+    merged = min(plain or files, key=len)  # the layer-pair files carry longer suffixes
+    return merged, [f for f in files if f != merged]
 
 
 # -- program discovery --------------------------------------------------------

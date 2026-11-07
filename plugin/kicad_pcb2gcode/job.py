@@ -21,14 +21,15 @@ from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
 from . import gerber
+from .boardfile import inner_copper_layers, read_board, special_via_kinds
 from .export import (
     COPPER_LAYERS,
     OUTLINE_LAYER,
     drill_command,
-    find_drill_file,
     gerber_command,
     gerbers_fallback_command,
     gerbers_fallback_file,
+    split_drill_files,
 )
 from .i18n import problem_text, tr
 from .millproject import Inputs, mill_diameter, render, validate
@@ -137,13 +138,61 @@ def export_drill(req: JobRequest, cam_dir: str, log: Log) -> Optional[str]:
                 (result.stdout or "").strip()
             )
         )
-    produced = find_drill_file(drill_dir)
+    produced, layer_pairs = split_drill_files(drill_dir, req.board_file)
+    if layer_pairs:
+        raise JobError(_special_vias_message(["blind"]) + "\n" + ", ".join(os.path.basename(f) for f in layer_pairs))
     if not produced:
         return None
     target = os.path.join(cam_dir, "drill.drl")
     os.replace(produced, target)
     shutil.rmtree(drill_dir, ignore_errors=True)
     return target
+
+
+def _special_vias_message(kinds: List[str]) -> str:
+    names = {"blind": tr("blind/buried", "Blind-/Buried-"), "buried": tr("blind/buried", "Blind-/Buried-"),
+             "micro": tr("micro", "Micro-")}
+    label = tr(" and ", " und ").join(sorted({names.get(k, k) for k in kinds}))
+    return tr(
+        "The board uses {} vias. They end in inner layers and cannot be made by milling and drilling.",
+        "Das Board verwendet {}Vias. Sie enden in Innenlagen und lassen sich durch Fräsen und Bohren nicht herstellen.",
+    ).format(label)
+
+
+def check_layer_stack(req: JobRequest, cam_dir: str, log: Log) -> None:
+    """Refuse boards milling cannot make: inner layers with copper (unless the
+    user opted to mill the outer layers only) and blind, buried or micro vias."""
+    text = read_board(req.board_file)
+    vias = special_via_kinds(text)
+    if vias:
+        raise JobError(_special_vias_message(vias))
+    inner = inner_copper_layers(text)
+    if not inner:
+        return
+    inner_dir = os.path.join(cam_dir, "inner")
+    os.makedirs(inner_dir, exist_ok=True)
+    used = []
+    for layer in inner:
+        target = os.path.join(inner_dir, layer.replace(".", "_") + ".gbr")
+        export_layer(req, layer, target, log)
+        if gerber.layer_stats(target).draws:
+            used.append(layer)
+    count = len(inner) + 2
+    if not used:
+        log(tr("Note: the board has {} copper layers, the inner layers are empty.",
+               "Hinweis: Das Board hat {} Kupferlagen, die Innenlagen sind leer.").format(count))
+        return
+    if not req.settings.general.outer_layers_only:
+        raise JobError(tr(
+            "The board has {} copper layers and {} carry copper. Isolation milling can only make "
+            "the top and bottom side.\nTo ignore the inner layers on purpose, tick 'Mill outer "
+            "layers only' in the General tab.",
+            "Das Board hat {} Kupferlagen, {} sind belegt. Isolationsfräsen kann nur Ober- und "
+            "Unterseite herstellen.\nUm die Innenlagen bewusst zu ignorieren, im Reiter Allgemein "
+            "„Nur Außenlagen fräsen“ ankreuzen.",
+        ).format(count, ", ".join(used)))
+    log(tr("Warning: ignoring copper on {} - those connections will be missing.",
+           "Warnung: Kupfer auf {} wird ignoriert - diese Verbindungen fehlen.").format(", ".join(used)))
 
 
 def _rel(path: str, start: str) -> str:
@@ -158,6 +207,7 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str]":
     cam_dir = os.path.join(out, CAM_SUBDIR)
     os.makedirs(cam_dir, exist_ok=True)
     inputs = Inputs()
+    check_layer_stack(req, cam_dir, log)
 
     wanted = s.general.sides
     sides_to_export = ["front", "back"] if wanted in ("auto", "both") else [wanted]

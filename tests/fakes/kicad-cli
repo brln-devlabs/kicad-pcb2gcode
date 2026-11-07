@@ -20,6 +20,9 @@ def opt(name):
 
 
 board = args[-1]
+if not os.path.isfile(board):
+    print("Board file does not exist")
+    sys.exit(2)
 stem = os.path.splitext(os.path.basename(board))[0]
 
 GERBERS = {
@@ -27,11 +30,14 @@ GERBERS = {
     "B.Cu": "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.25*%\n%ADD11C,1.7*%\nD10*\nX0Y0D02*\nX2540000Y0D01*\nD11*\nX0Y0D03*\nM02*\n",
     "Edge.Cuts": "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.1*%\nD10*\nX0Y0D02*\nX10000000Y0D01*\nX10000000Y10000000D01*\nX0Y0D01*\nM02*\n",
 }
-DRILL = "M48\nMETRIC\nT1C0.800\n%\nG90\nG05\nT1\nX0.0Y0.0\nX2.54Y0.0\nM30\n"
+with open(board) as fh:
+    BOARD_TEXT = fh.read()
+INNER = (GERBERS["B.Cu"] if "INNER_TRACES" in BOARD_TEXT
+         else "%FSLAX46Y46*%\n%MOMM*%\n%ADD11C,1.7*%\nD11*\nX0Y0D03*\nM02*\n")
+for n in range(1, 31):
+    GERBERS["In{}.Cu".format(n)] = INNER
 
-if not os.path.isfile(board):
-    print("Board file does not exist")
-    sys.exit(2)
+DRILL = "M48\nMETRIC\nT1C0.800\n%\nG90\nG05\nT1\nX0.0Y0.0\nX2.54Y0.0\nM30\n"
 
 if args[:3] == ["pcb", "export", "gerber"]:
     if os.environ.get("FAKE_NO_SINGLE_GERBER"):
@@ -47,6 +53,9 @@ elif args[:3] == ["pcb", "export", "gerbers"]:
 elif args[:3] == ["pcb", "export", "drill"]:
     with open(os.path.join(opt("--output"), stem + ".drl"), "w") as fh:
         fh.write(DRILL)
+    if "LAYERPAIR_DRILL" in BOARD_TEXT:
+        with open(os.path.join(opt("--output"), stem + "-F_Cu-In1_Cu.drl"), "w") as fh:
+            fh.write(DRILL)
 else:
     print("unexpected arguments: " + " ".join(args))
     sys.exit(1)

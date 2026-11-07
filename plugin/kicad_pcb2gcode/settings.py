@@ -42,6 +42,7 @@ class GeneralSettings:
     export_outline: bool = True
     use_aux_origin: bool = False  # KiCad drill/place file origin instead of absolute
     include_unsaved: bool = True  # export a copy of the open board, unsaved edits included
+    outer_layers_only: bool = False  # mill F.Cu/B.Cu even if inner layers carry copper
     zero_start: bool = True
     zsafe: float = 2.0
     zchange: float = 20.0

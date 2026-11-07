@@ -120,6 +120,55 @@ def test_missing_programs(board):
         run_job(req, lambda line: None)
 
 
+FOUR_LAYERS = '(kicad_pcb (layers (0 "F.Cu" signal) (4 "In1.Cu" signal) (6 "In2.Cu" signal) (2 "B.Cu" signal)) (setup)'
+
+
+def test_inner_layers_with_copper_stop_the_job(board):
+    with open(board, "w") as fh:
+        fh.write(FOUR_LAYERS + " INNER_TRACES)")
+    with pytest.raises(JobError) as err:
+        run_job(request(board), lambda line: None)
+    assert "4 copper layers" in str(err.value)
+    assert "In1.Cu, In2.Cu" in str(err.value)
+    assert "Mill outer layers only" in str(err.value)
+
+
+def test_inner_layers_can_be_ignored_on_purpose(board):
+    with open(board, "w") as fh:
+        fh.write(FOUR_LAYERS + " INNER_TRACES)")
+    s = Settings()
+    s.general.outer_layers_only = True
+    log = []
+    result = run_job(request(board, s), log.append)
+    assert result.files
+    assert any("ignoring copper on In1.Cu, In2.Cu" in line for line in log)
+
+
+def test_empty_inner_layers_only_give_a_note(board):
+    with open(board, "w") as fh:
+        fh.write(FOUR_LAYERS + ")")
+    log = []
+    assert run_job(request(board), log.append).files
+    assert any("inner layers are empty" in line for line in log)
+
+
+def test_blind_vias_stop_the_job(board):
+    with open(board, "w") as fh:
+        fh.write(FOUR_LAYERS + ' (via blind (at 0 0) (layers "F.Cu" "In1.Cu")))')
+    s = Settings()
+    s.general.outer_layers_only = True  # the override does not cover vias
+    with pytest.raises(JobError, match="blind/buried vias"):
+        run_job(request(board, s), lambda line: None)
+
+
+def test_layer_pair_drill_files_stop_the_job(board):
+    with open(board, "w") as fh:
+        fh.write("(kicad_pcb LAYERPAIR_DRILL)")
+    with pytest.raises(JobError) as err:
+        run_job(request(board), lambda line: None)
+    assert "my board-F_Cu-In1_Cu.drl" in str(err.value)
+
+
 def test_basename_is_filesystem_safe(board):
     s = Settings()
     s.general.basename = "a/b c?"

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from . import gerber, preview
-from .boardfile import inner_copper_layers, read_board, special_via_kinds
+from .boardfile import copper_zone_clearances, inner_copper_layers, read_board, special_via_kinds
 from .export import (
     COPPER_LAYERS,
     OUTLINE_LAYER,
@@ -220,6 +220,31 @@ def check_layer_stack(req: JobRequest, cam_dir: str, log: Log) -> None:
            "Warnung: Kupfer auf {} wird ignoriert - diese Verbindungen fehlen.").format(", ".join(used)))
 
 
+def isolation_hint(req: JobRequest, sides: str, log: Log) -> None:
+    """Copper pours leave gaps of the zone clearance only; a much wider
+    isolation width mills hardly more there but costs pcb2gcode a lot of time
+    (every extra pass is a geometry operation on the whole pour)."""
+    width = req.settings.isolation.isolation_width
+    layers = {"front": ["F.Cu"], "back": ["B.Cu"], "both": ["F.Cu", "B.Cu"]}.get(sides, [])
+    zones = [(layer, c) for layer, c in copper_zone_clearances(read_board(req.board_file)) if layer in layers]
+    if not zones or width <= 0:
+        return
+    clearance = max(c for _, c in zones)
+    if width <= clearance + 1e-9:
+        return
+    log(tr("Note: copper pours on {} leave gaps of {} mm. An isolation width of {} mm mills hardly more "
+           "there but makes pcb2gcode much slower; {} to {} mm is usually enough (tab Isolation).",
+           "Hinweis: Kupferflächen auf {} lassen {} mm Abstand. Eine Isolationsbreite von {} mm fräst dort "
+           "kaum mehr frei, macht pcb2gcode aber deutlich langsamer; {} bis {} mm reichen meist (Reiter Isolation).")
+        .format(", ".join(sorted({layer for layer, _ in zones})), fmt_mm(clearance), fmt_mm(width),
+                fmt_mm(clearance / 2), fmt_mm(clearance)))
+
+
+def fmt_mm(value: float) -> str:
+    text = "{:.2f}".format(value).rstrip("0").rstrip(".")
+    return text.replace(".", ",") if tr("en", "de") == "de" else text
+
+
 def _rel(path: str, start: str) -> str:
     return os.path.relpath(path, start).replace(os.sep, "/")
 
@@ -261,6 +286,7 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Dict[str, O
         if stats is not None and stats.empty:
             log(tr("Warning: {} is empty.", "Warnung: {} ist leer.").format(COPPER_LAYERS[chosen]))
 
+    isolation_hint(req, chosen, log)
     if chosen in ("front", "both"):
         inputs.front = _rel(copper["front"], out)
     if chosen in ("back", "both"):

@@ -538,3 +538,22 @@ def test_log_shows_how_long_pcb2gcode_took(board):
     log = []
     run_job(request(board), log.append)
     assert any(line.startswith("  (pcb2gcode took ") for line in log)
+
+
+def test_isolation_hint_for_copper_pours(tmp_path):
+    from kicad_pcb2gcode.job import isolation_hint
+
+    board = tmp_path / "b.kicad_pcb"
+    board.write_text('(kicad_pcb (zone (net 1) (net_name "GND") (layer "B.Cu") (connect_pads (clearance 1))\n'
+                     '  (polygon (pts (xy 0 0) (xy 1 0) (xy 1 1)))))\n')
+    s = Settings()
+    req = request(str(board), s)
+    log = []
+    isolation_hint(req, "both", log.append)
+    assert len(log) == 1 and "copper pours on B.Cu leave gaps of 1 mm" in log[0]
+    assert "isolation width of 2 mm" in log[0] and "0.5 to 1 mm" in log[0]
+    log.clear()
+    isolation_hint(req, "front", log.append)  # no pour on the milled side
+    s.isolation.isolation_width = 1.0
+    isolation_hint(request(str(board), s), "both", log.append)  # narrow enough
+    assert log == []

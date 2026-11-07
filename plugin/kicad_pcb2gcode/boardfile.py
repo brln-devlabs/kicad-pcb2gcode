@@ -56,3 +56,26 @@ def drill_origin(text: str) -> Optional[Tuple[float, float]]:
     if x == 0 and y == 0:
         return None
     return x, y
+
+
+_ZONE = re.compile(r"\(zone\b(.*?)\(polygon\b", re.S)
+_ZONE_LAYERS = re.compile(r'\(layers?\s+((?:"?[\w.*&]+"?\s*)+)\)')
+_ZONE_CLEARANCE = re.compile(r"\(connect_pads\b[^()]*\(clearance\s+([\d.]+)\s*\)")
+
+
+def copper_zone_clearances(text: str) -> List[Tuple[str, float]]:
+    """(copper layer, clearance in mm) of every filled copper zone; keepout
+    areas (no fill) are left out."""
+    found = []
+    for m in _ZONE.finditer(text):
+        block = m.group(1)
+        if "(keepout" in block:
+            continue
+        clearance = _ZONE_CLEARANCE.search(block)
+        layers = _ZONE_LAYERS.search(block)
+        if not clearance or not layers:
+            continue
+        for name in re.findall(r'"?([\w.*&]+)"?', layers.group(1)):
+            names = ["F.Cu", "B.Cu"] if name in ("F&B.Cu", "*.Cu") else [name]
+            found += [(n, float(clearance.group(1))) for n in names if n.endswith(".Cu")]
+    return found

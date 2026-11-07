@@ -76,3 +76,33 @@ def test_drill_origin():
     assert drill_origin(TWO_LAYER) is None  # KiCad leaves the entry out at 0/0
     assert drill_origin("(setup (aux_axis_origin 0 0))") is None
     assert drill_origin("(setup\n\t\t(aux_axis_origin 100.5 -80.25)\n\t)") == (100.5, -80.25)
+
+
+def test_copper_zone_clearances():
+    from kicad_pcb2gcode.boardfile import copper_zone_clearances
+
+    kicad10 = """
+	(zone
+		(net "GND")
+		(layer "F.Cu")
+		(hatch edge 0.5)
+		(connect_pads yes
+			(clearance 1)
+		)
+		(polygon (pts (xy 0 0) (xy 1 0) (xy 1 1)))
+	)
+	(zone (net 0) (net_name "") (layers "F.Cu" "B.Cu") (hatch edge 0.5)
+		(connect_pads (clearance 0))
+		(keepout (tracks not_allowed) (vias not_allowed) (pads allowed) (copperpour not_allowed))
+		(polygon (pts (xy 0 0) (xy 1 0) (xy 1 1)))
+	)
+	(zone (net 1) (net_name "GND") (layer "B.Cu") (hatch edge 0.5)
+		(connect_pads (clearance 0.4))
+		(polygon (pts (xy 0 0) (xy 1 0) (xy 1 1)))
+	)
+	(zone (net 1) (net_name "GND") (layers "F&B.Cu") (connect_pads (clearance 0.3))
+		(polygon (pts (xy 0 0) (xy 1 0) (xy 1 1)))
+	)
+"""
+    assert copper_zone_clearances(kicad10) == [("F.Cu", 1.0), ("B.Cu", 0.4), ("F.Cu", 0.3), ("B.Cu", 0.3)]
+    assert copper_zone_clearances("(kicad_pcb (version 1))") == []

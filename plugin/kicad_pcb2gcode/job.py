@@ -18,7 +18,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from . import gerber
 from .boardfile import inner_copper_layers, read_board, special_via_kinds
@@ -30,6 +30,7 @@ from .export import (
     gerbers_fallback_command,
     gerbers_fallback_file,
     split_drill_files,
+    split_separate_drill_files,
 )
 from .i18n import problem_text, tr
 from .millproject import Inputs, mask_settings, mill_diameters, render, validate
@@ -61,6 +62,7 @@ class JobResult:
     files: List[str] = field(default_factory=list)
     millproject_path: str = ""
     mask_inputs: Optional[Inputs] = None
+    npth_inputs: Optional[Inputs] = None
 
 
 def _popen_kwargs() -> dict:
@@ -128,26 +130,44 @@ def export_layer(req: JobRequest, layer: str, target: str, log: Log) -> None:
     )
 
 
-def export_drill(req: JobRequest, cam_dir: str, log: Log) -> Optional[str]:
+def export_drill(req: JobRequest, cam_dir: str, log: Log) -> Dict[str, Optional[str]]:
+    """Export the drill file(s). Returns {"merged": …} or {"pth": …, "npth": …}
+    with paths below ``cam_dir`` (None where KiCad wrote nothing)."""
+    separate = req.settings.drill.holes != "merged"
     drill_dir = os.path.join(cam_dir, "drill")
     shutil.rmtree(drill_dir, ignore_errors=True)
     os.makedirs(drill_dir, exist_ok=True)
-    result = _quiet_run(drill_command(req.kicad_cli, req.board_file, drill_dir, req.settings.general.use_aux_origin))
+    result = _quiet_run(drill_command(req.kicad_cli, req.board_file, drill_dir,
+                                      req.settings.general.use_aux_origin, separate=separate))
     if result.returncode != 0:
         raise JobError(
             tr("kicad-cli could not export the drill file:\n{}", "kicad-cli konnte die Bohrdatei nicht exportieren:\n{}").format(
                 (result.stdout or "").strip()
             )
         )
-    produced, layer_pairs = split_drill_files(drill_dir, req.board_file)
+    if separate:
+        pth, npth, layer_pairs = split_separate_drill_files(drill_dir, req.board_file)
+        produced = {"pth": pth, "npth": npth}
+    else:
+        merged, layer_pairs = split_drill_files(drill_dir, req.board_file)
+        produced = {"merged": merged}
     if layer_pairs:
         raise JobError(_special_vias_message(["blind"]) + "\n" + ", ".join(os.path.basename(f) for f in layer_pairs))
-    if not produced:
-        return None
-    target = os.path.join(cam_dir, "drill.drl")
-    os.replace(produced, target)
+    names = {"merged": "drill.drl", "pth": "drill_pth.drl", "npth": "drill_npth.drl"}
+    for old in names.values():
+        stale = os.path.join(cam_dir, old)
+        if os.path.isfile(stale):
+            os.remove(stale)
+    targets: Dict[str, Optional[str]] = {}
+    for kind, path in produced.items():
+        if path is None:
+            targets[kind] = None
+            continue
+        target = os.path.join(cam_dir, names[kind])
+        os.replace(path, target)
+        targets[kind] = target
     shutil.rmtree(drill_dir, ignore_errors=True)
-    return target
+    return targets
 
 
 def _special_vias_message(kinds: List[str]) -> str:
@@ -200,10 +220,11 @@ def _rel(path: str, start: str) -> str:
     return os.path.relpath(path, start).replace(os.sep, "/")
 
 
-def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Optional[Inputs]]":
+def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Dict[str, Optional[Inputs]]]":
     """Export everything pcb2gcode needs into ``<output>/cam``; return the
-    inputs (paths relative to the output folder), the chosen copper sides and
-    the inputs of the solder-mask run (None if there is none)."""
+    inputs of the main run (paths relative to the output folder), the chosen
+    copper sides and the inputs of the extra runs ("npth", "mask"; None where
+    a run is not needed)."""
     s = req.settings
     out = req.output_dir
     cam_dir = os.path.join(out, CAM_SUBDIR)
@@ -266,12 +287,31 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Optional[In
                    "Keine Platinenkontur: pcb2gcode legt den Nullpunkt selbst fest (mit Rand), "
                    "eine Unterseite wird in den negativen X-Bereich gespiegelt."))
 
+    npth_inputs = None
     if s.general.export_drill:
         log(tr("Exporting drill file ...", "Exportiere Bohrdatei ..."))
-        drill = export_drill(req, cam_dir, log)
-        if drill and gerber.drill_hits(drill):
-            inputs.drill = _rel(drill, out)
-        else:
+        drills = export_drill(req, cam_dir, log)
+
+        def usable(kind: str) -> Optional[str]:
+            path = drills.get(kind)
+            return _rel(path, out) if path and gerber.drill_hits(path) else None
+
+        mode = s.drill.holes
+        if mode == "merged":
+            inputs.drill = usable("merged")
+        elif mode in ("pth", "npth"):
+            inputs.drill = usable(mode)
+            log(tr("Drilling {} holes only.", "Es werden nur {}-Löcher gebohrt.").format(mode.upper()))
+        else:  # separate: plated holes in the main run, non-plated ones in a run of their own
+            inputs.drill = usable("pth")
+            npth = usable("npth")
+            if npth:
+                npth_inputs = Inputs(drill=npth, board_box=inputs.board_box)
+            if not inputs.drill:
+                log(tr("No plated holes (PTH).", "Keine durchkontaktierten Löcher (PTH)."))
+            if not npth:
+                log(tr("No non-plated holes (NPTH).", "Keine nicht durchkontaktierten Löcher (NPTH)."))
+        if not inputs.drill and npth_inputs is None:
             log(tr("No holes - skipping drilling.", "Keine Bohrungen - Bohren wird übersprungen."))
 
     mask_inputs = None
@@ -288,13 +328,13 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Optional[In
         if not mask_inputs.mills:
             mask_inputs = None
 
-    return inputs, chosen, mask_inputs
+    return inputs, chosen, {"npth": npth_inputs, "mask": mask_inputs}
 
 
 def _job_name(path: str) -> str:
     """"front", "drill", "mask_back" … from a pcb2gcode output file name."""
     stem = os.path.basename(path)[:-4]
-    for job in ("mask_front", "mask_back"):
+    for job in ("mask_front", "mask_back", "npth_drill", "npth_milldrill"):
         if stem.endswith("_" + job):
             return job
     return stem.rsplit("_", 1)[-1]
@@ -318,11 +358,15 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
         tr("  Blank {} in the frame, origin X0/Y0 = lower-left corner of the frame.",
            "  Rohling {} in den Rahmen, Nullpunkt X0/Y0 = linke untere Rahmenecke.").format(size),
     ]
-    first = [j for j in ("front", "drill", "milldrill") if j in by_job]
+    first = [j for j in ("front", "drill", "milldrill", "npth_drill", "npth_milldrill") if j in by_job]
     n = 1
+    split = "npth_drill" in by_job or "npth_milldrill" in by_job
     for job in first:
-        label = {"front": tr("top side", "Oberseite"), "drill": tr("drill", "bohren"),
-                 "milldrill": tr("mill holes", "Löcher fräsen")}[job]
+        label = {"front": tr("top side", "Oberseite"),
+                 "drill": tr("drill PTH", "bohren PTH") if split else tr("drill", "bohren"),
+                 "milldrill": tr("mill holes PTH", "Löcher fräsen PTH") if split else tr("mill holes", "Löcher fräsen"),
+                 "npth_drill": tr("drill NPTH", "bohren NPTH"),
+                 "npth_milldrill": tr("mill holes NPTH", "Löcher fräsen NPTH")}[job]
         lines.append("  {}. {}  ({})".format(n, by_job[job], label))
         n += 1
     if "back" in by_job:
@@ -366,6 +410,7 @@ def clean_outputs(output_dir: str) -> None:
 
 
 MASK_PROJECT = "millproject_mask"
+NPTH_PROJECT = "millproject_npth"
 
 
 def _run_pcb2gcode(req: JobRequest, cmd: List[str], log: Log) -> None:
@@ -394,40 +439,47 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
         raise JobError(tr("Board file not found: {}", "Board-Datei nicht gefunden: {}").format(req.board_file))
 
     os.makedirs(req.output_dir, exist_ok=True)
-    inputs, sides, mask_inputs = prepare_inputs(req, log)
+    inputs, sides, extra = prepare_inputs(req, log)
+    basename = basename_for(req)
 
-    problems = validate(req.settings, inputs)
-    if mask_inputs is not None:
-        mask_problems = validate(mask_settings(req.settings), mask_inputs)
-    else:
-        mask_problems = []
-    if problems or mask_problems:
-        lines = [problem_text(p) for p in problems]
-        lines += [tr("Solder mask: ", "Lötstopp: ") + problem_text(p) for p in mask_problems]
+    # (config file, settings, inputs, basename, label) for every pcb2gcode run
+    runs = []
+    if not inputs.empty or not any(extra.values()):
+        runs.append(("millproject", req.settings, inputs, basename, ""))
+    if extra["npth"] is not None:
+        runs.append((NPTH_PROJECT, req.settings, extra["npth"], basename + "_npth", tr("NPTH: ", "NPTH: ")))
+    if extra["mask"] is not None:
+        runs.append((MASK_PROJECT, mask_settings(req.settings), extra["mask"], basename + "_mask",
+                     tr("Solder mask: ", "Lötstopp: ")))
+
+    lines = []
+    for _, settings, run_inputs, _, label in runs:
+        lines += [label + problem_text(p) for p in validate(settings, run_inputs)]
+    if lines:
         raise JobError("\n".join(lines))
 
     if inputs.mills:
         log(tr("Mill diameters: {} mm", "Fräserdurchmesser: {} mm").format(
             ", ".join("{:g}".format(d) for d in mill_diameters(req.settings))))
 
-    basename = basename_for(req)
+    used = {config for config, *_ in runs}
+    for config in ("millproject", NPTH_PROJECT, MASK_PROJECT):
+        path = os.path.join(req.output_dir, config)
+        if config not in used and os.path.isfile(path):
+            os.remove(path)
+    for config, settings, run_inputs, run_basename, _ in runs:
+        with open(os.path.join(req.output_dir, config), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(render(settings, run_inputs, run_basename))
     millproject_path = os.path.join(req.output_dir, "millproject")
-    with open(millproject_path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(render(req.settings, inputs, basename))
-
-    mask_project = os.path.join(req.output_dir, MASK_PROJECT)
-    if mask_inputs is not None:
-        with open(mask_project, "w", encoding="utf-8", newline="\n") as fh:
-            fh.write(render(mask_settings(req.settings), mask_inputs, basename + "_mask"))
-    elif os.path.isfile(mask_project):
-        os.remove(mask_project)
 
     clean_outputs(req.output_dir)
-    log(tr("Running pcb2gcode ...", "Starte pcb2gcode ..."))
-    _run_pcb2gcode(req, [req.pcb2gcode], log)
-    if mask_inputs is not None:
-        log(tr("Running pcb2gcode for the solder mask ...", "Starte pcb2gcode für den Lötstopp ..."))
-        _run_pcb2gcode(req, [req.pcb2gcode, "--config", MASK_PROJECT], log)
+    for config, _, _, _, label in runs:
+        if config == "millproject":
+            log(tr("Running pcb2gcode ...", "Starte pcb2gcode ..."))
+            _run_pcb2gcode(req, [req.pcb2gcode], log)
+        else:
+            log(tr("Running pcb2gcode ({}) ...", "Starte pcb2gcode ({}) ...").format(label.rstrip(": ")))
+            _run_pcb2gcode(req, [req.pcb2gcode, "--config", config], log)
 
     files = sorted(glob.glob(os.path.join(req.output_dir, "*.ngc")))
     if not files:
@@ -446,4 +498,4 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
         except OSError:
             pass
     return JobResult(output_dir=req.output_dir, sides=sides, inputs=inputs, files=files,
-                     millproject_path=millproject_path, mask_inputs=mask_inputs)
+                     millproject_path=millproject_path, mask_inputs=extra["mask"], npth_inputs=extra["npth"])

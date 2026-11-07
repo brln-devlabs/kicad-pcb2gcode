@@ -122,6 +122,15 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
         Field("drill", "zdrill", ("Drill depth", "Bohrtiefe"), "float", "mm"),
         Field("drill", "drill_feed", ("Plunge rate", "Bohrvorschub"), "float", "mm/min"),
         Field("drill", "drill_speed", ("Spindle speed", "Spindeldrehzahl"), "float", "1/min"),
+        Field("drill", "holes", ("Holes", "Bohrungen"), "choice", choices=(
+            ("merged", ("PTH and NPTH together (one file)", "PTH und NPTH zusammen (eine Datei)")),
+            ("separate", ("PTH and NPTH separately (two files)", "PTH und NPTH getrennt (zwei Dateien)")),
+            ("pth", ("Plated holes only (PTH)", "Nur durchkontaktierte Löcher (PTH)")),
+            ("npth", ("Non-plated holes only (NPTH)", "Nur nicht durchkontaktierte Löcher (NPTH)")),
+        ), tip=("Separately: <board>_drill.ngc for PTH and <board>_npth_drill.ngc for NPTH, "
+                "e.g. for different drills or to mill mounting holes later.",
+                "Getrennt: <board>_drill.ngc für PTH und <board>_npth_drill.ngc für NPTH, "
+                "z. B. für unterschiedliche Bohrer oder um Befestigungslöcher später zu bohren.")),
         Field("drill", "drill_side", ("Drill from", "Bohren von"), "choice", choices=SIDE_CHOICES),
         Field("drill", "drills_available", ("Available drills", "Verfügbare Bohrer"), "text", "mm",
               tip=("Comma separated, e.g. 0.8, 1.0, 1.2. Empty: one tool per hole size.",

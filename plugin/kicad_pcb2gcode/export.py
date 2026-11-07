@@ -56,10 +56,11 @@ def gerbers_fallback_file(output_dir: str, board: str, layer: str) -> str:
     return os.path.join(output_dir, "{}-{}.gbr".format(stem, layer.replace(".", "_")))
 
 
-def drill_command(kicad_cli: str, board: str, output_dir: str, use_aux_origin: bool) -> List[str]:
-    """Excellon drill file, metric, decimal coordinates, PTH and NPTH merged,
-    oval holes as G85 slots."""
-    return [
+def drill_command(kicad_cli: str, board: str, output_dir: str, use_aux_origin: bool,
+                  separate: bool = False) -> List[str]:
+    """Excellon drill file(s), metric, decimal coordinates, oval holes as G85
+    slots; PTH and NPTH merged into one file or written separately."""
+    cmd = [
         kicad_cli, "pcb", "export", "drill",
         "--output", output_dir + os.sep,
         "--format", "excellon",
@@ -67,14 +68,28 @@ def drill_command(kicad_cli: str, board: str, output_dir: str, use_aux_origin: b
         "--excellon-zeros-format", "decimal",
         "--excellon-oval-format", "alternate",
         "--drill-origin", "plot" if use_aux_origin else "absolute",
-        board,
     ]
+    if separate:
+        cmd.append("--excellon-separate-th")
+    cmd.append(board)
+    return cmd
 
 
 def find_drill_file(output_dir: str, board: Optional[str] = None) -> Optional[str]:
     """The drill file with the through holes (``<board>.drl``)."""
     merged, _ = split_drill_files(output_dir, board)
     return merged
+
+
+def split_separate_drill_files(output_dir: str, board: str) -> "tuple[Optional[str], Optional[str], List[str]]":
+    """Files of ``--excellon-separate-th``: ``<board>-PTH.drl``, ``<board>-NPTH.drl``
+    and anything else (layer-pair files of blind/buried vias)."""
+    stem = os.path.splitext(os.path.basename(board))[0]
+    files = sorted(glob.glob(os.path.join(output_dir, "*.drl")))
+    pth = os.path.join(output_dir, stem + "-PTH.drl")
+    npth = os.path.join(output_dir, stem + "-NPTH.drl")
+    others = [f for f in files if f not in (pth, npth)]
+    return (pth if pth in files else None), (npth if npth in files else None), others
 
 
 def split_drill_files(output_dir: str, board: Optional[str] = None) -> "tuple[Optional[str], List[str]]":

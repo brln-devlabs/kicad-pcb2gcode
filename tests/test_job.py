@@ -361,3 +361,60 @@ def test_unset_drill_origin_is_noted_in_the_log(board):
     log = []
     generate(ctx, s, cfg, log.append)
     assert any("measured from the sheet corner" in line for line in log)
+
+
+def run_with_holes(board, mode):
+    s = Settings()
+    s.drill.holes = mode
+    s.mask.enabled = False
+    return run_job(request(board, s), lambda line: None)
+
+
+def test_holes_merged_is_the_default(board):
+    result = run_with_holes(board, "merged")
+    assert result.inputs.drill == "cam/drill.drl" and result.npth_inputs is None
+    assert Settings().drill.holes == "merged"
+
+
+def test_holes_separate(board):
+    result = run_with_holes(board, "separate")
+    names = sorted(os.path.basename(f) for f in result.files)
+    assert "my_board_drill.ngc" in names and "my_board_npth_drill.ngc" in names
+    main = read_options(result.millproject_path)
+    npth = read_options(os.path.join(result.output_dir, "millproject_npth"))
+    assert main["drill"] == "cam/drill_pth.drl"
+    assert npth["drill"] == "cam/drill_npth.drl" and npth["basename"] == "my_board_npth"
+    for key in ("front", "back", "outline"):
+        assert key not in npth
+    for key in ("x-offset", "y-offset", "mirror-axis", "zdrill", "drill-feed"):  # same placement and tool
+        assert npth[key] == main[key], key
+
+
+def test_holes_pth_or_npth_only(board):
+    pth = run_with_holes(board, "pth")
+    assert pth.inputs.drill == "cam/drill_pth.drl" and pth.npth_inputs is None
+    npth = run_with_holes(board, "npth")
+    assert npth.inputs.drill == "cam/drill_npth.drl"
+    assert not os.path.exists(os.path.join(npth.output_dir, "millproject_npth"))
+
+
+def test_separate_without_npth_holes(board):
+    with open(board, "w") as fh:
+        fh.write("(kicad_pcb NO_NPTH)")
+    result = run_with_holes(board, "separate")
+    assert result.npth_inputs is None
+    assert not any("npth" in os.path.basename(f) for f in result.files)
+
+
+def test_flip_frame_with_separate_holes(board):
+    s = Settings()
+    s.general.frame_mode = True
+    s.general.sides = "both"
+    s.drill.holes = "separate"
+    s.mask.enabled = False
+    result = run_job(request(board, s), lambda line: None)
+    steps = open(os.path.join(result.output_dir, "STEPS.txt")).read()
+    assert steps.index("my_board_drill.ngc  (drill PTH)") < steps.index("my_board_npth_drill.ngc  (drill NPTH)")
+    assert steps.index("my_board_npth_drill.ngc") < steps.index("Turn the board over")
+    npth = read_options(os.path.join(result.output_dir, "millproject_npth"))
+    assert npth["drill-side"] == "front"

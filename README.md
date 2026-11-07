@@ -66,7 +66,10 @@ Open a board, press the toolbar button, check the settings, press
 * **Isolation** – available mill diameters (the width your tool cuts at the
   milling depth, one or several), depth, feeds, isolation width, overlap
   (percent or length), Voronoi mode – the same fields as in pcb2gcodeGUI.
-* **Drilling** – depth, feed, available drill sizes, milling large holes.
+* **Drilling** – depth, feed, available drill sizes, milling large holes;
+  plated (PTH) and non-plated (NPTH) holes together in one file (default),
+  in two files (`<board>_drill.ngc` and `<board>_npth_drill.ngc`), or only
+  one kind.
 * **Outline** – cutter, depth per pass, holding tabs.
 * **Solder mask** – mills the openings of `F.Mask`/`B.Mask` free (on by default),
   see below.
@@ -100,6 +103,7 @@ my-board/
     my-board_mask_front.ngc solder mask openings, top side
     millproject             the exact pcb2gcode configuration used
     millproject_mask        … and the one of the solder-mask run
+    millproject_npth        … and of the NPTH run (holes separately)
     cam/                    exported Gerber and drill files
 ```
 

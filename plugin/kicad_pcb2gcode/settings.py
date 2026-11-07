@@ -31,6 +31,8 @@ SIDES = ("auto", "front", "back", "both")
 SIDE_CHOICES = ("auto", "front", "back")
 FEED_DIRECTIONS = ("any", "climb", "conventional")
 FLIP_AXES = ("leftright", "topbottom")
+# merged: PTH+NPTH in one file; separate: two files; pth / npth: only that kind
+HOLE_MODES = ("merged", "separate", "pth", "npth")
 
 
 @dataclass
@@ -93,6 +95,7 @@ class DrillSettings:
     drill_feed: float = 300.0
     drill_speed: float = 24000.0
     drill_side: str = "auto"
+    holes: str = "merged"  # see HOLE_MODES
     drills_available: str = ""  # e.g. "0.8, 1.0, 1.2"; empty = one tool per hole size
     onedrill: bool = True
     milldrill: bool = False  # mill large holes with a small end mill
@@ -184,6 +187,8 @@ class Settings:
             g.sides = "auto"
         if i.mill_feed_direction not in FEED_DIRECTIONS:
             i.mill_feed_direction = "any"
+        if d.holes not in HOLE_MODES:
+            d.holes = "merged"
         if d.drill_side not in SIDE_CHOICES:
             d.drill_side = "auto"
         if o.cut_side not in SIDE_CHOICES:

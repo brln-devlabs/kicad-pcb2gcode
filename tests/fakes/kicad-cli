@@ -44,6 +44,8 @@ for n in range(1, 31):
     GERBERS["In{}.Cu".format(n)] = INNER
 
 DRILL = "M48\nMETRIC\nT1C0.800\n%\nG90\nG05\nT1\nX0.0Y0.0\nX2.54Y0.0\nM30\n"
+DRILL_NPTH = "M48\nMETRIC\nT1C3.200\n%\nG90\nG05\nT1\nX1.0Y8.0\nM30\n"
+DRILL_EMPTY = "M48\nMETRIC\n%\nG90\nG05\nM30\n"
 
 if args[:3] == ["pcb", "export", "gerber"]:
     if os.environ.get("FAKE_NO_SINGLE_GERBER"):
@@ -57,8 +59,14 @@ elif args[:3] == ["pcb", "export", "gerbers"]:
     with open(out, "w") as fh:
         fh.write(GERBERS[layer])
 elif args[:3] == ["pcb", "export", "drill"]:
-    with open(os.path.join(opt("--output"), stem + ".drl"), "w") as fh:
-        fh.write(DRILL)
+    if "--excellon-separate-th" in args:
+        with open(os.path.join(opt("--output"), stem + "-PTH.drl"), "w") as fh:
+            fh.write(DRILL)
+        with open(os.path.join(opt("--output"), stem + "-NPTH.drl"), "w") as fh:
+            fh.write(DRILL_EMPTY if "NO_NPTH" in BOARD_TEXT else DRILL_NPTH)
+    else:
+        with open(os.path.join(opt("--output"), stem + ".drl"), "w") as fh:
+            fh.write(DRILL)
     if "LAYERPAIR_DRILL" in BOARD_TEXT:
         with open(os.path.join(opt("--output"), stem + "-F_Cu-In1_Cu.drl"), "w") as fh:
             fh.write(DRILL)

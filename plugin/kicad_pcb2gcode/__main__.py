@@ -27,6 +27,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--no-drill", action="store_true", help="skip drilling")
     p.add_argument("--no-outline", action="store_true", help="skip the board outline")
     p.add_argument("--no-mask", action="store_true", help="skip milling the solder mask openings")
+    p.add_argument("--holes", choices=("merged", "separate", "pth", "npth"),
+                   help="PTH and NPTH in one drill file, in two, or only one kind")
     p.add_argument("--frame", action="store_true",
                    help="flip frame: no outline cut, drill from the top, corner at X0/Y0")
     p.add_argument("--flip", choices=("leftright", "topbottom"), help="axis the board is turned over about")
@@ -65,6 +67,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         overrides["general"] = general
     if args.no_mask:
         overrides["mask"] = {"enabled": False}
+    if args.holes:
+        overrides["drill"] = {"holes": args.holes}
 
     from .app import main_standalone
 

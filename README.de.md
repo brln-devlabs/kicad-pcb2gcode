@@ -68,7 +68,10 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
   Werkzeug in der Frästiefe schneidet; einer oder mehrere), Tiefe,
   Vorschübe, Isolationsbreite, Überlappung (Prozent oder Länge),
   Voronoi-Modus – dieselben Felder wie in pcb2gcodeGUI.
-* **Bohren** – Tiefe, Vorschub, verfügbare Bohrergrößen, große Löcher fräsen.
+* **Bohren** – Tiefe, Vorschub, verfügbare Bohrergrößen, große Löcher fräsen;
+  durchkontaktierte (PTH) und nicht durchkontaktierte (NPTH) Löcher zusammen in
+  einer Datei (Voreinstellung), getrennt in zwei Dateien (`<board>_drill.ngc`
+  und `<board>_npth_drill.ngc`) oder nur eine Art.
 * **Kontur** – Fräser, Zustellung pro Durchgang, Haltestege.
 * **Lötstopp** – fräst die Öffnungen von `F.Mask`/`B.Mask` frei (standardmäßig
   an), siehe unten.
@@ -105,6 +108,7 @@ mein-board/
     mein-board_mask_front.ngc Lötstopp-Öffnungen Oberseite
     millproject               die verwendete pcb2gcode-Konfiguration
     millproject_mask          … und die des Lötstopp-Laufs
+    millproject_npth          … und die des NPTH-Laufs (Löcher getrennt)
     cam/                      exportierte Gerber- und Bohrdateien
 ```
 

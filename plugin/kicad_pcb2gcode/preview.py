@@ -139,3 +139,23 @@ def wheel_factor(rotation: int, delta: int) -> float:
     """1.25 per notch of the mouse wheel; touchpads send fractions of a notch."""
     steps = rotation / float(delta or 120)
     return 1.25 ** steps
+
+
+def ease_scale(current: float, target: float, fraction: float = 0.35):
+    """One animation step from ``current`` towards ``target`` scale, evenly
+    in log space so zooming in and out feel the same. Returns (scale, done)."""
+    import math
+
+    if current <= 0 or target <= 0 or abs(math.log(target / current)) < 0.003:
+        return target, True
+    return current * (target / current) ** fraction, False
+
+
+def raster_size(image_w: float, image_h: float, fit_scale: float, longest: int = 2600):
+    """Pixel size of the whole-image raster used while zooming and dragging:
+    four times the fitted size, at most ``longest`` pixels on the long side."""
+    if image_w <= 0 or image_h <= 0:
+        return 0, 0, 0.0
+    scale = min(fit_scale * 4.0, longest / max(image_w, image_h))
+    scale = max(scale, fit_scale)
+    return max(int(image_w * scale), 1), max(int(image_h * scale), 1), scale

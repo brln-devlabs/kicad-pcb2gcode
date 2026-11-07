@@ -79,7 +79,7 @@ Next to the tabs a **preview** shows the images pcb2gcode draws, as
 pcb2gcodeGUI does: copper with tool paths per side, drill holes, outline,
 solder mask – and, listed first, spots where the clearance could not be kept.
 It fills after **Generate G-code** and shows the last run's images when the
-window opens. Zoom with the mouse wheel (around the pointer), drag with the
+window opens. Zoom smoothly with the mouse wheel (around the pointer), drag with the
 left or middle button to move the view, double-click or **⤢** to fit. The
 images are kept in `gcode/preview/`; **↗** opens the selected
 one in the web browser (needed with wxPython older than 4.1, which cannot draw

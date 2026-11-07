@@ -84,3 +84,27 @@ def test_wheel_factor():
     assert wheel_factor(120, 120) == 1.25
     assert wheel_factor(-240, 120) == 1 / 1.25 ** 2
     assert 1 < wheel_factor(30, 120) < 1.25  # touchpad: part of a notch
+
+
+def test_ease_scale_converges_both_ways():
+    from kicad_pcb2gcode.preview import ease_scale
+
+    for start, target in ((1.0, 8.0), (8.0, 1.0)):
+        scale, done, steps = start, False, 0
+        while not done:
+            previous = scale
+            scale, done = ease_scale(scale, target)
+            assert min(start, target) <= scale <= max(start, target)
+            assert abs(target - scale) <= abs(target - previous)
+            steps += 1
+        assert scale == target and 5 < steps < 30  # a short, visible glide
+
+
+def test_raster_size():
+    from kicad_pcb2gcode.preview import raster_size
+
+    w, h, s = raster_size(200, 100, fit_scale=2.0)
+    assert (w, h, s) == (1600, 800, 8.0)  # 4x the fitted size
+    w, h, s = raster_size(1000, 500, fit_scale=1.0, longest=2600)
+    assert (w, h, s) == (2600, 1300, 2.6)  # capped by the long side ...
+    assert raster_size(100, 100, fit_scale=50.0, longest=2600)[2] == 50.0  # ... but never below fit

@@ -81,7 +81,7 @@ Neben den Reitern zeigt eine **Vorschau** die Bilder, die pcb2gcode zeichnet,
 wie bei pcb2gcodeGUI: Kupfer mit Fräsbahnen je Seite, Bohrungen, Kontur,
 Lötstopp – und ganz oben Stellen, an denen der Abstand nicht eingehalten werden
 konnte. Sie füllt sich nach **G-Code erzeugen** und zeigt beim Öffnen des
-Fensters die Bilder des letzten Laufs. Mit dem Mausrad wird um den Mauszeiger
+Fensters die Bilder des letzten Laufs. Mit dem Mausrad wird flüssig um den Mauszeiger
 gezoomt, Ziehen mit linker oder mittlerer Taste verschiebt die Ansicht,
 Doppelklick oder **⤢** passt das Bild wieder ein. Die Bilder liegen in
 `gcode/preview/`;

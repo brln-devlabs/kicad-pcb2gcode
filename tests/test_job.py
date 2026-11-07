@@ -559,3 +559,39 @@ def test_isolation_hint_for_copper_pours(tmp_path):
     s.isolation.isolation_width = 1.0
     isolation_hint(request(str(board), s), "both", log.append)  # narrow enough
     assert log == []
+
+
+def test_start_move_goes_up_then_to_the_origin_first(board):
+    result = run_job(request(board), lambda line: None)
+    for path in result.files:
+        lines = [l.split("(")[0].strip() for l in open(path) if l.split("(")[0].strip()]
+        start = lines.index("G53 G0 Z-5")
+        assert lines[start + 1] == "G0 X0 Y0"
+        before = lines[:start]
+        assert "G21" in before and "G90" in before  # units and absolute mode are set
+        assert not any(l.startswith(("G0", "G1", "X", "Y", "Z")) for l in before)  # no move before it
+        assert lines.count("G53 G0 Z-5") == 1
+
+
+def test_start_move_can_be_switched_off(board):
+    s = Settings()
+    s.machine.start_at_origin = False
+    result = run_job(request(board, s), lambda line: None)
+    assert not any("G53" in open(path).read() for path in result.files)
+
+
+def test_add_start_move_details(tmp_path):
+    from kicad_pcb2gcode.job import add_start_move
+
+    path = tmp_path / "a.ngc"
+    path.write_text("( header )\r\nG21\r\nG90 (abs)\r\nG00 Z10\r\n", newline="")
+    assert add_start_move(str(path), -2.5)
+    text = path.read_text(newline="")
+    assert text.startswith("( header )\r\nG21\r\nG90 (abs)\r\nG53 G0 Z-2.5 (kicad-pcb2gcode start: up in machine coordinates)\r\n")
+    assert "\r\nG0 X0 Y0 (to the origin)\r\nG00 Z10\r\n" in text
+    assert not add_start_move(str(path), -2.5)  # only once
+    other = tmp_path / "b.ngc"
+    other.write_text("G00 Z10\nG90\n")
+    assert add_start_move(str(other), -5)  # no G90 before the first move: in front of it
+    assert other.read_text().splitlines()[:3] == ["G53 G0 Z-5 (kicad-pcb2gcode start: up in machine coordinates)",
+                                                  "G0 X0 Y0 (to the origin)", "G00 Z10"]

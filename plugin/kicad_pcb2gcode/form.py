@@ -208,6 +208,16 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
                    "pcb2gcode hält (M0) vor jedem Werkzeug an, auch vor dem ersten. Mit dieser Option wird "
                    "die erste Pause jeder Datei entfernt; Pausen für Werkzeugwechsel innerhalb einer Datei "
                    "bleiben.")),
+        Field("machine", "start_at_origin", ("Start at X0/Y0, raised to machine Z",
+                                              "Am Anfang hochfahren und zu X0/Y0"), "bool",
+              tip=("Each file first raises Z to the machine height below (G53 - needs homing) and moves over "
+                   "the origin, then starts.",
+                   "Jede Datei fährt zuerst Z auf die Maschinenhöhe darunter (G53 - braucht Referenzfahrt) und "
+                   "dann über den Nullpunkt, danach geht es los.")),
+        Field("machine", "start_machine_z", ("Machine Z for the start (G53)", "Maschinen-Z für den Start (G53)"),
+              "float", "mm",
+              tip=("Machine coordinates: 0 is the Z limit switch after homing, -5 is 5 mm below it.",
+                   "Maschinenkoordinaten: 0 ist der Z-Endschalter nach der Referenzfahrt, -5 liegt 5 mm darunter.")),
         Field("machine", "tolerance", ("Path tolerance", "Bahntoleranz"), "float", "mm",
               tip=("Allowed deviation from the ideal path. 0 = pcb2gcode's default.",
                    "Erlaubte Abweichung von der idealen Bahn. 0 = Voreinstellung von pcb2gcode.")),

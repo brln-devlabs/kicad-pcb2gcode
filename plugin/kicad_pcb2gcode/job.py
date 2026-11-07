@@ -37,6 +37,7 @@ from .export import (
 from .i18n import problem_text, tr
 from .millproject import Inputs, mask_settings, mill_diameters, render, validate
 from .settings import Settings
+from .tools import fmt
 
 Log = Callable[[str], None]
 CAM_SUBDIR = "cam"
@@ -468,6 +469,42 @@ def remove_first_pause(path: str) -> bool:
     return False
 
 
+START_TAG = "kicad-pcb2gcode start"
+
+
+def add_start_move(path: str, machine_z: float) -> bool:
+    """Insert, right after the units and G90 at the top of a G-code file, a
+    move up to ``machine_z`` in machine coordinates (G53) and then over X0/Y0.
+    Returns True if the file was changed."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return False
+    if any(START_TAG in line for line in lines):
+        return False
+    ending = "\r\n" if lines and lines[0].endswith("\r\n") else "\n"
+    at = None
+    for i, line in enumerate(lines):
+        code = line.split("(", 1)[0].split(";", 1)[0].strip().upper()
+        if re.match(r"^G90(?![0-9.])", code):
+            at = i + 1
+            break
+        if re.match(r"^(G0*[0-3](?![0-9.])|[XYZ]|M0*[0-9])", code):
+            at = i  # no G90 before the first move: insert in front of it
+            break
+    if at is None:
+        return False
+    block = [
+        "G53 G0 Z{} ({}: up in machine coordinates)".format(fmt(machine_z), START_TAG) + ending,
+        "G0 X0 Y0 (to the origin)" + ending,
+    ]
+    lines[at:at] = block
+    with open(path, "w", encoding="utf-8", newline="") as fh:
+        fh.writelines(lines)
+    return True
+
+
 def rename_outputs(files: List[str], extension: str) -> List[str]:
     """Give pcb2gcode's .ngc files the chosen extension."""
     if extension == "ngc":
@@ -616,6 +653,13 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
         if removed:
             log(tr("Removed the pause at the start of {} file(s).",
                    "Pause am Dateianfang in {} Datei(en) entfernt.").format(removed))
+    m = req.settings.machine
+    if m.start_at_origin:
+        added = sum(add_start_move(path, m.start_machine_z) for path in files)
+        if added:
+            log(tr("Each file first moves up to machine Z {} (G53) and over X0/Y0 ({} file(s)).",
+                   "Jede Datei fährt zuerst auf Maschinen-Z {} (G53) und über X0/Y0 ({} Datei(en)).")
+                .format(fmt(m.start_machine_z), added))
     if not files:
         raise JobError(tr("pcb2gcode finished but wrote no G-code.", "pcb2gcode lief durch, hat aber keinen G-Code geschrieben."))
     log(tr("Done. G-code files:", "Fertig. G-Code-Dateien:"))

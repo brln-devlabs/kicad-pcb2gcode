@@ -845,6 +845,8 @@ class Pcb2GcodeDialog(wx.Dialog):
         frame = bool(self.controls[("general", "frame_mode")][1].GetValue())
         for key in (("general", "zero_start"), ("drill", "drill_side"), ("outline", "cut_side")):
             self.controls[key][1].Enable(not frame)
+        start = bool(self.controls[("machine", "start_at_origin")][1].GetValue())
+        self.controls[("machine", "start_machine_z")][1].Enable(start)
         mask = bool(self.controls[("mask", "enabled")][1].GetValue())
         for (section, name), (_, ctrl) in self.controls.items():
             if section == "mask" and name != "enabled":

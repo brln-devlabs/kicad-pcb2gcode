@@ -548,6 +548,7 @@ def test_isolation_hint_for_copper_pours(tmp_path):
     board.write_text('(kicad_pcb (zone (net 1) (net_name "GND") (layer "B.Cu") (connect_pads (clearance 1))\n'
                      '  (polygon (pts (xy 0 0) (xy 1 0) (xy 1 1)))))\n')
     s = Settings()
+    s.isolation.isolation_width = 2.0
     req = request(str(board), s)
     log = []
     isolation_hint(req, "both", log.append)

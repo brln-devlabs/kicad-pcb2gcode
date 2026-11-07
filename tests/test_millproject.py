@@ -19,7 +19,6 @@ nog64=true
 tolerance=0.0100
 zchange=10.0000
 zsafe=5.0000
-isolation-width=2.0000
 mill-diameters=0.154
 mill-feed=1200
 mill-speed=24000
@@ -40,6 +39,7 @@ zbridges=-0.6000
 zcut=-2.5000
 """
 # zero-start=true: replaced by exact x-offset/y-offset on the board outline
+# isolation-width=2.0000: 1 mm here - with copper pours 2 mm mills hardly more but takes far longer
 
 
 def test_defaults_match_the_pcb2gcodegui_config():
@@ -55,6 +55,7 @@ def test_defaults_match_the_pcb2gcodegui_config():
     assert opts["mill-vertfeed"] == "600"  # pcb2gcode: half the feed rate
     assert opts["milling-overlap"] == "50%"
     assert opts["bridgesnum"] == "2"
+    assert float(opts["isolation-width"]) == 1.0
 
 
 def test_defaults_are_grbl_safe():

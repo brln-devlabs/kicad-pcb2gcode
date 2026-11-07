@@ -103,9 +103,11 @@ verwenden** an und die Platinenecke aus ist.
 
 Die Voreinstellungen stammen aus einer bewährten pcb2gcodeGUI-Einstellung
 für eine GRBL-Fräse mit 24 000 1/min: ein Gravierstichel, der in 0,25 mm Tiefe
-0,154 mm breit schneidet (2 mm Isolationsbreite, 0,1 mm zusätzlicher
+0,154 mm breit schneidet (0,1 mm zusätzlicher
 Bahnabstand), ein Bohrer für alle Löcher, ein 1,5-mm-Fräser für die Kontur in
-einem Durchgang von 2,5 mm mit zwei Haltestegen à 0,5 mm.
+einem Durchgang von 2,5 mm mit zwei Haltestegen à 0,5 mm. Eine Abweichung:
+Die Isolationsbreite ist 1 mm statt 2 mm – bei Kupferflächen fräsen 2 mm kaum
+mehr frei, machen pcb2gcode aber deutlich langsamer.
 **Prüfe die Werte immer gegen deine Werkzeuge und fahre neue Einstellungen
 zuerst in der Luft ab.**
 

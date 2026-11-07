@@ -97,8 +97,10 @@ matters with **Use drill/place file origin** on and the board corner off.
 
 The defaults come from a proven pcb2gcodeGUI setup on a GRBL machine with a
 24 000 rpm spindle: an engraving bit cutting 0.154 mm wide at 0.25 mm depth
-(2 mm isolation width, 0.1 mm extra offset), one drill size, a 1.5 mm end mill
-for the outline cut in a single 2.5 mm pass with two 0.5 mm tabs.
+(0.1 mm extra offset), one drill size, a 1.5 mm end mill
+for the outline cut in a single 2.5 mm pass with two 0.5 mm tabs. One
+difference: the isolation width is 1 mm instead of that setup's 2 mm, which
+with copper pours mills hardly more and makes pcb2gcode much slower.
 **Always check the numbers against your tools and air-cut new settings
 first.**
 

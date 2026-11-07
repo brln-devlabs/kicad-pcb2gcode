@@ -88,7 +88,9 @@ class IsolationSettings:
     mill_feed: float = 1200.0
     mill_vertfeed: float = 600.0  # pcb2gcode's own default is half the feed rate
     mill_speed: float = 24000.0
-    isolation_width: float = 2.0  # 0 = a single pass around each trace
+    # 0 = a single pass around each trace. 1 mm instead of pcb2gcodeGUI's 2 mm:
+    # with copper pours the wider band mills hardly more but takes far longer.
+    isolation_width: float = 1.0
     milling_overlap: str = "50%"  # percent of the tool width, or a length like "0.05mm"
     voronoi: bool = False
     preserve_thermal_reliefs: bool = True  # Voronoi mode only

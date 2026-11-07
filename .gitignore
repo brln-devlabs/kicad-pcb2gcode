@@ -7,3 +7,4 @@ dist/
 tests/e2e/dense.kicad_pcb
 tests/e2e/gcode/
 tests/e2e/*.pcb2gcode.json
+tests/e2e/pour.kicad_pcb

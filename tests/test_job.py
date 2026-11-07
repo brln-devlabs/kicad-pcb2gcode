@@ -532,3 +532,9 @@ def test_previews_after_a_run(board, monkeypatch):
     assert "Bottom side (B.Cu)" in labels and "Drill" in labels and "Outline" in labels
     assert "Solder mask top" in labels and "Solder mask bottom" in labels
     assert not [f for f in os.listdir(result.output_dir) if f.endswith(".svg")]
+
+
+def test_log_shows_how_long_pcb2gcode_took(board):
+    log = []
+    run_job(request(board), log.append)
+    assert any(line.startswith("  (pcb2gcode took ") for line in log)

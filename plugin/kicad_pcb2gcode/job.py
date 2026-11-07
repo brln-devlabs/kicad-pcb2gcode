@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
@@ -505,8 +506,16 @@ def pcb2gcode_missing_message(searched: List[str]) -> str:
     return "\n".join(lines)
 
 
+def _duration(seconds: float) -> str:
+    if seconds < 60:
+        return "{:.1f} s".format(seconds)
+    return "{}:{:02d} min".format(int(seconds // 60), int(seconds % 60))
+
+
 def _run_pcb2gcode(req: JobRequest, cmd: List[str], log: Log) -> None:
+    start = time.monotonic()
     code = _run(cmd, log, cwd=req.output_dir)
+    log(tr("  (pcb2gcode took {})", "  (pcb2gcode brauchte {})").format(_duration(time.monotonic() - start)))
     if code != 0:
         raise JobError(tr("pcb2gcode failed (exit code {}). See the log above.",
                           "pcb2gcode ist fehlgeschlagen (Exit-Code {}). Details im Protokoll oben.").format(code))

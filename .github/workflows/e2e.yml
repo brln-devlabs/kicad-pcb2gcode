@@ -13,6 +13,7 @@ permissions:
 jobs:
   e2e:
     runs-on: ubuntu-24.04
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - name: Install KiCad 9
@@ -47,7 +48,7 @@ jobs:
           mkdir -p ../out/frame && cp -r ../tests/e2e/gcode/. ../out/frame/ && rm -rf ../tests/e2e/gcode
           rm -f ../tests/e2e/rect.pcb2gcode.json
           for board in rounded rect dense; do
-            python3 -m kicad_pcb2gcode "../tests/e2e/$board.kicad_pcb" --lang en || true
+            timeout 600 python3 -m kicad_pcb2gcode "../tests/e2e/$board.kicad_pcb" --lang en || true
             ls -l "../tests/e2e/gcode" || true
             mkdir -p "../out/$board"
             cp -r ../tests/e2e/gcode/. "../out/$board/" || true
@@ -57,7 +58,7 @@ jobs:
         run: |
           sudo apt-get install -y python3-wxgtk4.0 xvfb
           for board in rounded dense; do
-            xvfb-run -a -s "-screen 0 1600x1000x24" /usr/bin/python3 tests/e2e/gui_check.py "tests/e2e/$board.kicad_pcb" "out/gui-$board"
+            timeout 900 xvfb-run -a -s "-screen 0 1600x1000x24" /usr/bin/python3 tests/e2e/gui_check.py "tests/e2e/$board.kicad_pcb" "out/gui-$board"
             rm -rf tests/e2e/gcode
           done
           # snapshots as text, to look at them without downloading the artifact

@@ -7,8 +7,8 @@ import sys
 here = os.path.dirname(os.path.abspath(__file__))
 head = open(os.path.join(here, "rect.kicad_pcb"), encoding="utf-8").read()
 head = head[: head.index("  (footprint")]
-head = head.replace("(aux_axis_origin 100 130)", "(aux_axis_origin 100 160)")
-cols, rows, pitch = 30, 20, 2.54
+head = head.replace("(aux_axis_origin 100 130)", "(aux_axis_origin 100 132)")
+cols, rows, pitch = 14, 8, 2.54
 x0, y0 = 105.0, 107.0
 parts = [head]
 nets = []
@@ -34,7 +34,7 @@ for r in range(rows - 1):
     y = y0 + r * pitch + pitch / 2
     parts.append('  (segment (start {:.3f} {:.3f}) (end {:.3f} {:.3f}) (width 0.25) (layer "{}") (net 0))\n'
                  .format(x0, y, x0 + (cols - 1) * pitch, y, "B.Cu" if r % 2 else "F.Cu"))
-parts.append('  (gr_rect (start 100 100) (end 185 160) (layer "Edge.Cuts") (width 0.1) (fill none))\n)\n')
+parts.append('  (gr_rect (start 100 100) (end 145 132) (layer "Edge.Cuts") (width 0.1) (fill none))\n)\n')
 target = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "dense.kicad_pcb")
 open(target, "w", encoding="utf-8").write("".join(parts))
 print("wrote", target)

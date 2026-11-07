@@ -10,29 +10,77 @@ def options(settings=None, inputs=ALL):
     return dict(build_options(settings or Settings(), inputs, "board"))
 
 
+# The pcb2gcodeGUI configuration the defaults are taken from (Common, Mill,
+# Drill and Outline sections; the autoleveller is not used with GRBL).
+PCB2GCODEGUI_CONFIG = """
+metric=true
+metricoutput=true
+nog64=true
+tolerance=0.0100
+zchange=10.0000
+zsafe=5.0000
+isolation-width=2.0000
+mill-diameters=0.154
+mill-feed=1200
+mill-speed=24000
+offset=0.1000
+zwork=-0.2500
+drill-feed=300
+drill-speed=24000
+nog81=true
+onedrill=true
+zdrill=-2.5000
+bridges=0.5000
+cut-feed=800
+cut-infeed=2.5000
+cut-speed=24000
+cut-vertfeed=60
+cutter-diameter=1.5000
+zbridges=-0.6000
+zcut=-2.5000
+"""
+# zero-start=true: replaced by exact x-offset/y-offset on the board outline
+
+
+def test_defaults_match_the_pcb2gcodegui_config():
+    opts = options()
+    for line in PCB2GCODEGUI_CONFIG.strip().splitlines():
+        key, value = line.split("=")
+        assert key in opts, key
+        if value in ("true", "false"):
+            assert opts[key] == value, key
+        else:
+            assert float(opts[key]) == float(value), (key, opts[key])
+    # values the config left to pcb2gcode's defaults, written explicitly here
+    assert opts["mill-vertfeed"] == "600"  # pcb2gcode: half the feed rate
+    assert opts["milling-overlap"] == "50%"
+    assert opts["bridgesnum"] == "2"
+
+
 def test_defaults_are_grbl_safe():
     opts = options()
-    assert opts["metric"] == "true"
-    assert opts["metricoutput"] == "true"
-    for key in ("nog64", "nog81", "nog91-1", "nom6"):
+    for key in ("nog64", "nog81", "nom6"):  # GRBL knows neither G64, G81 nor M6
         assert opts[key] == "true", key
+    assert "nog91-1" not in opts  # GRBL understands G91.1
     assert opts["output-dir"] == "."
     assert opts["basename"] == "board"
 
 
-def test_inputs_and_sections():
+def test_inputs():
     opts = options()
     assert opts["front"] == "cam/front.gbr"
     assert opts["back"] == "cam/back.gbr"
     assert opts["drill"] == "cam/drill.drl"
     assert opts["outline"] == "cam/outline.gbr"
-    assert opts["zwork"] == "-0.08"
-    assert opts["mill-diameters"] == "0.15"
-    assert opts["isolation-width"] == "0.3"
-    assert opts["milling-overlap"] == "20%"
     assert opts["fill-outline"] == "true"
-    assert opts["bridgesnum"] == "4"
-    assert opts["zbridges"] == "-1"
+
+
+def test_offset_and_tolerance_can_be_switched_off():
+    s = Settings()
+    s.isolation.offset = 0
+    s.machine.tolerance = 0
+    opts = options(s)
+    assert "offset" not in opts and "tolerance" not in opts
 
 
 def test_sections_are_omitted_without_inputs():
@@ -49,7 +97,7 @@ def test_single_pass():
     s = Settings()
     s.isolation.isolation_width = 0
     opts = options(s)
-    assert opts["mill-diameters"] == "0.15"
+    assert opts["mill-diameters"] == "0.154"
     assert "isolation-width" not in opts
     assert "milling-overlap" not in opts
 
@@ -80,10 +128,11 @@ def test_optional_drill_options():
     s.drill.drill_side = "back"
     opts = options(s)
     assert opts["drills-available"] == "0.8,1,1.2"
-    assert opts["milldrill-diameter"] == "1"
-    assert opts["min-milldrill-hole-diameter"] == "1.5"
+    assert opts["milldrill-diameter"] == "3"
+    assert opts["min-milldrill-hole-diameter"] == "3"
+    assert opts["zmilldrill"] == "-2.5"
     assert opts["drill-side"] == "back"
-    assert "onedrill" not in opts
+    assert opts["onedrill"] == "true"
 
 
 def test_no_tabs():
@@ -137,6 +186,8 @@ def test_validate_accepts_defaults():
         (lambda s: setattr(s.outline, "zcut", 0), "zcut_negative"),
         (lambda s: setattr(s.outline, "zbridges", -5), "bridges_invalid"),
         (lambda s: setattr(s.outline, "cut_infeed", 0), "infeed_positive"),
+        (lambda s: setattr(s.isolation, "offset", -0.1), "offset_range"),
+        (lambda s: setattr(s.machine, "tolerance", -1), "tolerance_range"),
     ],
 )
 def test_validate_reports_problems(mutate, problem):

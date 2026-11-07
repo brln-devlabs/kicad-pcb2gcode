@@ -72,10 +72,13 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
 * **Kontur** – Fräser, Zustellung pro Durchgang, Haltestege.
 * **Maschine** – G-Code-Dialekt und zusätzliche pcb2gcode-Optionen.
 
-Die Voreinstellungen passen für eine kleine GRBL-Fräse (3018-Klasse) mit
-einem V-Bit, das in 0,08 mm Tiefe 0,15 mm breit schneidet, und einem
-1-mm-Fräser. **Prüfe die Werte immer gegen deine Werkzeuge und
-fahre neue Einstellungen zuerst in der Luft ab.**
+Die Voreinstellungen stammen aus einer bewährten pcb2gcodeGUI-Einstellung
+für eine GRBL-Fräse mit 24 000 1/min: ein Gravierstichel, der in 0,25 mm Tiefe
+0,154 mm breit schneidet (2 mm Isolationsbreite, 0,1 mm zusätzlicher
+Bahnabstand), ein Bohrer für alle Löcher, ein 1,5-mm-Fräser für die Kontur in
+einem Durchgang von 2,5 mm mit zwei Haltestegen à 0,5 mm.
+**Prüfe die Werte immer gegen deine Werkzeuge und fahre neue Einstellungen
+zuerst in der Luft ab.**
 
 ### Ausgabe
 
@@ -99,9 +102,10 @@ Senders.
 ### Hinweise zu GRBL
 
 Die Voreinstellungen schalten ab, was GRBL nicht kennt: `G64`
-(Bahnüberschleifen), `G81` (Bohrzyklus), `G91.1` und `M6`
-(Werkzeugwechsel). Mit grblHAL und Werkzeugwechsler lässt sich `M6` im Reiter
-**Maschine** wieder einschalten.
+(Bahnüberschleifen), `G81` (Bohrzyklus) und `M6` (Werkzeugwechsel). Mit grblHAL
+und Werkzeugwechsler lässt sich `M6` im Reiter **Maschine** wieder
+einschalten. `G91.1` versteht GRBL; *Kein G91.1* ist für Steuerungen gedacht,
+die es nicht kennen.
 
 ### Nullpunkt und doppelseitige Platinen
 

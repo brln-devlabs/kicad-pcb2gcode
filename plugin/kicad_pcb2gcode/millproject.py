@@ -58,6 +58,8 @@ def validate(settings: Settings, inputs: Inputs) -> List[str]:
         problems.append("zsafe_positive")
     if g.zchange <= 0:
         problems.append("zchange_positive")
+    if settings.machine.tolerance < 0:
+        problems.append("tolerance_range")
     if g.frame_mode and inputs.board_box is None:
         problems.append("frame_needs_outline")
     if inputs.mills:
@@ -75,6 +77,8 @@ def validate(settings: Settings, inputs: Inputs) -> List[str]:
             problems.append("overlap_invalid")
         if iso.isolation_width < 0:
             problems.append("isolation_width_range")
+        if iso.offset < 0:
+            problems.append("offset_range")
     if inputs.drill:
         if d.zdrill >= 0:
             problems.append("zdrill_negative")
@@ -163,6 +167,8 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
     for key, enabled in (("nog64", m.nog64), ("nog81", m.nog81), ("nog91-1", m.nog91_1), ("nom6", m.nom6)):
         if enabled:
             add(key, True)
+    if m.tolerance > 0:
+        add("tolerance", m.tolerance)
 
     # -- isolation milling -------------------------------------------------
     if inputs.front:
@@ -173,6 +179,8 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
         sizes = mill_diameters(settings)
         add("zwork", iso.zwork)
         add("mill-diameters", ",".join(fmt(d) for d in sizes))
+        if iso.offset > 0:
+            add("offset", iso.offset)
         add("mill-feed", iso.mill_feed)
         add("mill-vertfeed", iso.mill_vertfeed)
         add("mill-speed", iso.mill_speed)

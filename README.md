@@ -70,9 +70,12 @@ Open a board, press the toolbar button, check the settings, press
 * **Outline** – cutter, depth per pass, holding tabs.
 * **Machine** – G-code dialect switches and extra pcb2gcode options.
 
-The defaults suit a small GRBL router (3018 class) with a V-bit cutting
-0.15 mm wide at 0.08 mm depth and a 1 mm end mill. **Always check the numbers against your tools and air-cut new
-settings first.**
+The defaults come from a proven pcb2gcodeGUI setup on a GRBL machine with a
+24 000 rpm spindle: an engraving bit cutting 0.154 mm wide at 0.25 mm depth
+(2 mm isolation width, 0.1 mm extra offset), one drill size, a 1.5 mm end mill
+for the outline cut in a single 2.5 mm pass with two 0.5 mm tabs.
+**Always check the numbers against your tools and air-cut new settings
+first.**
 
 ### Output
 
@@ -95,8 +98,9 @@ height-map feature of your sender instead.
 ### GRBL notes
 
 The defaults switch off what GRBL does not understand: `G64` (path blending),
-`G81` (drilling cycle), `G91.1` and `M6` (tool change). With grblHAL and a
-tool changer you can turn `M6` back on in the **Machine** tab.
+`G81` (drilling cycle) and `M6` (tool change). With grblHAL and a tool
+changer you can turn `M6` back on in the **Machine** tab. GRBL does
+understand `G91.1`; *No G91.1* is there for controllers that do not.
 
 ### Origin and double-sided boards
 

@@ -182,12 +182,6 @@ def render(lang: str) -> None:
     shots = [("general", titles.index("General"), defaults, ready)]
 
     iso = Settings()
-    iso.isolation.mill_diameters = "0.154"
-    iso.isolation.zwork = -0.25
-    iso.isolation.mill_feed = 1200
-    iso.isolation.mill_speed = 24000
-    iso.isolation.isolation_width = 2.0
-    iso.isolation.milling_overlap = "50%"
     shots.append(("isolation", titles.index("Isolation"), iso, ready))
 
     frame = Settings()

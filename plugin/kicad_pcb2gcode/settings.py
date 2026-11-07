@@ -51,8 +51,8 @@ class GeneralSettings:
     # and the pre-cut blank is turned over inside it. The outline is not cut,
     # holes are drilled from the top before turning.
     frame_mode: bool = False
-    zsafe: float = 2.0
-    zchange: float = 20.0
+    zsafe: float = 5.0
+    zchange: float = 10.0
     open_folder_after: bool = False
 
 
@@ -62,8 +62,9 @@ class MachineSettings:
 
     nog64: bool = True  # GRBL has no G64 path blending
     nog81: bool = True  # GRBL has no canned drilling cycles
-    nog91_1: bool = True  # GRBL has no G91.1
+    nog91_1: bool = False  # GRBL understands G91.1; some other controllers do not
     nom6: bool = True  # GRBL 1.1 rejects M6; grblHAL with a tool changer can use it
+    tolerance: float = 0.01  # allowed deviation from the ideal path, mm (0 = pcb2gcode's default)
     extra_options: str = ""  # raw millproject lines, appended verbatim
 
 
@@ -71,13 +72,16 @@ class MachineSettings:
 class IsolationSettings:
     # Width the tool cuts at the milling depth, as pcb2gcode's mill-diameters:
     # one value, or several (comma separated) to clear wider areas with more tools.
-    mill_diameters: str = "0.15"
-    zwork: float = -0.08
-    mill_feed: float = 200.0
-    mill_vertfeed: float = 50.0
-    mill_speed: float = 10000.0
-    isolation_width: float = 0.3  # 0 = a single pass around each trace
-    milling_overlap: str = "20%"  # percent of the tool width, or a length like "0.05mm"
+    mill_diameters: str = "0.154"
+    # Extra distance kept between tool path and copper, for a bit with a little slop
+    # (pcb2gcode's "offset", "Toolpath offset" in pcb2gcodeGUI).
+    offset: float = 0.1
+    zwork: float = -0.25
+    mill_feed: float = 1200.0
+    mill_vertfeed: float = 600.0  # pcb2gcode's own default is half the feed rate
+    mill_speed: float = 24000.0
+    isolation_width: float = 2.0  # 0 = a single pass around each trace
+    milling_overlap: str = "50%"  # percent of the tool width, or a length like "0.05mm"
     voronoi: bool = False
     preserve_thermal_reliefs: bool = True  # Voronoi mode only
     mill_feed_direction: str = "any"
@@ -85,30 +89,30 @@ class IsolationSettings:
 
 @dataclass
 class DrillSettings:
-    zdrill: float = -1.8
-    drill_feed: float = 60.0
-    drill_speed: float = 10000.0
+    zdrill: float = -2.5
+    drill_feed: float = 300.0
+    drill_speed: float = 24000.0
     drill_side: str = "auto"
     drills_available: str = ""  # e.g. "0.8, 1.0, 1.2"; empty = one tool per hole size
-    onedrill: bool = False
+    onedrill: bool = True
     milldrill: bool = False  # mill large holes with a small end mill
-    milldrill_diameter: float = 1.0
-    min_milldrill_hole_diameter: float = 1.5
-    zmilldrill: float = -1.8
+    milldrill_diameter: float = 3.0
+    min_milldrill_hole_diameter: float = 3.0
+    zmilldrill: float = -2.5
 
 
 @dataclass
 class OutlineSettings:
-    cutter_diameter: float = 1.0
-    zcut: float = -1.8
-    cut_infeed: float = 0.6
-    cut_feed: float = 100.0
-    cut_vertfeed: float = 40.0
-    cut_speed: float = 10000.0
+    cutter_diameter: float = 1.5
+    zcut: float = -2.5
+    cut_infeed: float = 2.5
+    cut_feed: float = 800.0
+    cut_vertfeed: float = 60.0
+    cut_speed: float = 24000.0
     cut_side: str = "auto"
-    bridges: float = 2.0  # tab width in mm
-    bridgesnum: int = 4  # 0 = no tabs
-    zbridges: float = -1.0
+    bridges: float = 0.5  # tab width in mm
+    bridgesnum: int = 2  # 0 = no tabs
+    zbridges: float = -0.6
 
 
 SECTIONS = ("general", "machine", "isolation", "drill", "outline")

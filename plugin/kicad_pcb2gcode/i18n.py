@@ -70,6 +70,8 @@ PROBLEMS = {
                                "Fräserdurchmesser: eine oder mehrere positive Zahlen mit Komma getrennt, z. B. 0.15."),
     "overlap_invalid": ("Overlap: a percentage below 100 (e.g. 20%) or a length (e.g. 0.05mm).",
                         "Überlappung: Prozentwert unter 100 (z. B. 20%) oder eine Länge (z. B. 0.05mm)."),
+    "offset_range": ("Toolpath offset must not be negative.", "Zusätzlicher Bahnabstand darf nicht negativ sein."),
+    "tolerance_range": ("Path tolerance must not be negative.", "Bahntoleranz darf nicht negativ sein."),
     "feed_positive": ("Feed rates must be positive.", "Vorschübe müssen positiv sein."),
     "isolation_width_range": ("Isolation width must not be negative.", "Isolationsbreite darf nicht negativ sein."),
     "zdrill_negative": ("Drill depth must be below zero.", "Bohrtiefe muss unter null liegen."),

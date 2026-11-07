@@ -1,0 +1,67 @@
+name: End-to-end
+
+# Runs the whole pipeline with the real kicad-cli (KiCad 9) and pcb2gcode on
+# the demo boards in tests/e2e/.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install KiCad 9
+        run: |
+          sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends kicad
+          kicad-cli version
+      - name: Install pcb2gcode (release build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view -R pcb2gcode/pcb2gcode --json tagName,assets -q '.tagName, .assets[].name'
+          asset=$(gh release view -R pcb2gcode/pcb2gcode --json assets -q '.assets[].name' | grep -i 'ubuntu-24.04' | grep -vi arm | grep '\.tar\.gz$' | head -1)
+          echo "asset: $asset"
+          mkdir -p "$HOME/p2g" && cd "$HOME/p2g"
+          gh release download -R pcb2gcode/pcb2gcode --pattern "$asset"
+          tar xzf "$asset"
+          dir=$(dirname "$(find . -name pcb2gcode -type f | head -1)")
+          sudo apt-get install -y libgtkmm-2.4-1v5 libglib2.0-bin
+          printf '#!/bin/sh\nLD_LIBRARY_PATH=%s/.libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} exec %s/pcb2gcode "$@"\n' "$PWD/$dir" "$PWD/$dir" | sudo tee /usr/local/bin/pcb2gcode
+          sudo chmod +x /usr/local/bin/pcb2gcode
+          pcb2gcode --version
+      - name: Run the plugin pipeline
+        working-directory: plugin
+        run: |
+          set -x
+          for board in rounded rect; do
+            python3 -m kicad_pcb2gcode "../tests/e2e/$board.kicad_pcb" --lang en || true
+            ls -l "../tests/e2e/gcode" || true
+            mkdir -p "../out/$board"
+            cp -r ../tests/e2e/gcode/. "../out/$board/" || true
+            rm -rf ../tests/e2e/gcode
+          done
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: e2e-output
+          path: out/
+      - name: Check the outputs
+        run: |
+          python3 - <<'PY'
+          import glob, os, sys
+          ok = True
+          for board in ("rounded", "rect"):
+              files = sorted(os.path.basename(p) for p in glob.glob(f"out/{board}/*.ngc"))
+              print(board, files)
+              for want in ("back", "drill", "outline", "mask_front", "mask_back"):
+                  if f"{board}_{want}.ngc" not in files:
+                      print(f"  MISSING {board}_{want}.ngc"); ok = False
+          sys.exit(0 if ok else 1)
+          PY

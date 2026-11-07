@@ -125,6 +125,13 @@ und Werkzeugwechsler lässt sich `M6` im Reiter **Maschine** wieder
 einschalten. `G91.1` versteht GRBL; *Kein G91.1* ist für Steuerungen gedacht,
 die es nicht kennen.
 
+pcb2gcode schreibt vor jedem Werkzeug einen Werkzeugwechsel-Block, auch vor dem
+ersten jeder Datei: auf Werkzeugwechselhöhe fahren, Spindel aus, Hinweis mit
+der Werkzeuggröße, Pause (`M0`, weiter mit Start/Resume), Spindel an. Mit
+**Pause am Anfang jeder Datei weglassen** (Reiter **Maschine**, standardmäßig
+aus) entfällt die erste Pause jeder Datei; Pausen für Werkzeugwechsel innerhalb
+einer Datei bleiben.
+
 ### Nullpunkt und doppelseitige Platinen
 
 Mit **Platinenecke auf X0/Y0** (Voreinstellung) liegt die linke untere Ecke

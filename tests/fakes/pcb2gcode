@@ -28,5 +28,12 @@ for key in ("front", "back", "drill", "outline"):
             print("ERROR: missing input " + options[key])
             sys.exit(5)
         with open("{}_{}.ngc".format(options["basename"], key), "w") as fh:
-            fh.write("G21\nG90\nM2\n")
+            fh.write("G94\nG21\nG90\n"
+                     "G00 Z10 (Retract to tool change height)\nT1\nM5      (Spindle stop.)\n"
+                     "(MSG, Change tool bit to mill diameter 0.154mm)\n"
+                     "M0      (Temporary machine stop.)\nM3 ( Spindle on clockwise. )\n"
+                     "G01 X1 Y1\n"
+                     "G00 Z10 (Retract to tool change height)\nT2\nM5      (Spindle stop.)\n"
+                     "M0      (Temporary machine stop.)\nM3 ( Spindle on clockwise. )\n"
+                     "G01 X2 Y2\nM5\nM2\n")
         print("Processing {} ... done".format(key))

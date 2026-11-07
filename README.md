@@ -118,6 +118,13 @@ The defaults switch off what GRBL does not understand: `G64` (path blending),
 changer you can turn `M6` back on in the **Machine** tab. GRBL does
 understand `G91.1`; *No G91.1* is there for controllers that do not.
 
+pcb2gcode writes a tool-change block before every tool, the first one of each
+file included: retract to the tool-change height, spindle off, a message with
+the tool size, a pause (`M0`, resume with cycle start), spindle on. With
+**Skip the pause at the start of each file** (tab **Machine**, off by default)
+the first pause of each file is removed; pauses for tool changes inside a file
+stay.
+
 ### Origin and double-sided boards
 
 With **Board corner at X0/Y0** (default) the lower-left corner of the board

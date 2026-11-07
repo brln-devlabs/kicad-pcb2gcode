@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -396,6 +397,32 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
     return lines
 
 
+_PAUSE = re.compile(r"^(\s*)M0+(?![0-9.])", re.IGNORECASE)
+
+
+def remove_first_pause(path: str) -> bool:
+    """Replace the first M0 (program pause) of a G-code file by a comment.
+
+    pcb2gcode writes a tool-change block with M0 before every tool; the first
+    one only pauses right after the operator started the file. Returns True
+    if a pause was removed.
+    """
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace", newline="") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return False
+    for i, line in enumerate(lines):
+        stripped = line.split("(", 1)[0].split(";", 1)[0]
+        if _PAUSE.match(stripped):
+            ending = "\r\n" if line.endswith("\r\n") else "\n"
+            lines[i] = "(M0 removed by kicad-pcb2gcode: first tool is loaded before starting the file)" + ending
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.writelines(lines)
+            return True
+    return False
+
+
 def clean_outputs(output_dir: str) -> None:
     """Remove G-code from earlier runs so stale files cannot be mistaken for new ones."""
     stale = glob.glob(os.path.join(output_dir, "*.ngc"))
@@ -482,6 +509,11 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
             _run_pcb2gcode(req, [req.pcb2gcode, "--config", config], log)
 
     files = sorted(glob.glob(os.path.join(req.output_dir, "*.ngc")))
+    if req.settings.machine.skip_first_pause:
+        removed = sum(remove_first_pause(path) for path in files)
+        if removed:
+            log(tr("Removed the pause at the start of {} file(s).",
+                   "Pause am Dateianfang in {} Datei(en) entfernt.").format(removed))
     if not files:
         raise JobError(tr("pcb2gcode finished but wrote no G-code.", "pcb2gcode lief durch, hat aber keinen G-Code geschrieben."))
     log(tr("Done. G-code files:", "Fertig. G-Code-Dateien:"))

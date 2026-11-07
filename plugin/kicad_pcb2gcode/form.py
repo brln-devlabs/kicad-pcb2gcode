@@ -190,6 +190,13 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
         Field("machine", "nom6", ("No M6 (tool change)", "Kein M6 (Werkzeugwechsel)"), "bool",
               tip=("GRBL 1.1 rejects M6. Turn off for grblHAL with a tool changer.",
                    "GRBL 1.1 lehnt M6 ab. Für grblHAL mit Werkzeugwechsler ausschalten.")),
+        Field("machine", "skip_first_pause", ("Skip the pause at the start of each file",
+                                               "Pause am Anfang jeder Datei weglassen"), "bool",
+              tip=("pcb2gcode stops (M0) before every tool, including the first one. With this option the "
+                   "first stop of each file is removed; stops for tool changes inside a file stay.",
+                   "pcb2gcode hält (M0) vor jedem Werkzeug an, auch vor dem ersten. Mit dieser Option wird "
+                   "die erste Pause jeder Datei entfernt; Pausen für Werkzeugwechsel innerhalb einer Datei "
+                   "bleiben.")),
         Field("machine", "tolerance", ("Path tolerance", "Bahntoleranz"), "float", "mm",
               tip=("Allowed deviation from the ideal path. 0 = pcb2gcode's default.",
                    "Erlaubte Abweichung von der idealen Bahn. 0 = Voreinstellung von pcb2gcode.")),

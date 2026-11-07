@@ -418,3 +418,39 @@ def test_flip_frame_with_separate_holes(board):
     assert steps.index("my_board_npth_drill.ngc") < steps.index("Turn the board over")
     npth = read_options(os.path.join(result.output_dir, "millproject_npth"))
     assert npth["drill-side"] == "front"
+
+
+def test_first_pause_is_kept_by_default(board):
+    result = run_job(request(board), lambda line: None)
+    text = open(result.files[0]).read()
+    assert text.count("M0      (Temporary machine stop.)") == 2
+
+
+def test_first_pause_can_be_removed(board):
+    s = Settings()
+    s.machine.skip_first_pause = True
+    log = []
+    result = run_job(request(board, s), log.append)
+    for path in result.files:
+        text = open(path).read()
+        assert text.count("M0      (Temporary machine stop.)") == 1, path  # the later tool change keeps its pause
+        assert "(M0 removed by kicad-pcb2gcode" in text
+        assert text.index("(M0 removed") < text.index("T2")
+        assert "M3 ( Spindle on clockwise. )" in text and "M5      (Spindle stop.)" in text
+    assert any("Removed the pause at the start of {} file(s)".format(len(result.files)) in line for line in log)
+
+
+def test_remove_first_pause_details(tmp_path):
+    from kicad_pcb2gcode.job import remove_first_pause
+
+    path = tmp_path / "a.ngc"
+    path.write_bytes(b"(M0 in a comment does not count)\r\nM03 S1000\r\nM05\r\nM00 ; pause\r\nM0\r\n")
+    assert remove_first_pause(str(path))
+    lines = path.read_bytes().split(b"\r\n")
+    assert lines[0] == b"(M0 in a comment does not count)"
+    assert lines[1] == b"M03 S1000" and lines[2] == b"M05"
+    assert lines[3].startswith(b"(M0 removed")
+    assert lines[4] == b"M0"
+    empty = tmp_path / "b.ngc"
+    empty.write_text("G21\nM2\n")
+    assert not remove_first_pause(str(empty))

@@ -67,6 +67,10 @@ class MachineSettings:
     nog91_1: bool = False  # GRBL understands G91.1; some other controllers do not
     nom6: bool = True  # GRBL 1.1 rejects M6; grblHAL with a tool changer can use it
     tolerance: float = 0.01  # allowed deviation from the ideal path, mm (0 = pcb2gcode's default)
+    # pcb2gcode stops with M0 before every tool, the first one included. The
+    # first stop is redundant when the operator loads that tool and starts the
+    # file anyway; later stops (real tool changes inside a file) stay.
+    skip_first_pause: bool = False
     extra_options: str = ""  # raw millproject lines, appended verbatim
 
 

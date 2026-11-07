@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Stand-in for kicad-cli used by the pipeline tests.
+
+F.Cu gets pads only, B.Cu gets traces, Edge.Cuts gets an outline, and the
+drill export writes a merged Excellon file. FAKE_NO_SINGLE_GERBER=1 makes the
+single-file "export gerber" command fail to exercise the fallback.
+"""
+import os
+import sys
+
+args = sys.argv[1:]
+log = os.environ.get("FAKE_CLI_LOG")
+if log:
+    with open(log, "a") as fh:
+        fh.write(" ".join(args) + "\n")
+
+
+def opt(name):
+    return args[args.index(name) + 1]
+
+
+board = args[-1]
+stem = os.path.splitext(os.path.basename(board))[0]
+
+GERBERS = {
+    "F.Cu": "%FSLAX46Y46*%\n%MOMM*%\n%ADD11C,1.7*%\nD11*\nX0Y0D03*\nX2540000Y0D03*\nM02*\n",
+    "B.Cu": "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.25*%\n%ADD11C,1.7*%\nD10*\nX0Y0D02*\nX2540000Y0D01*\nD11*\nX0Y0D03*\nM02*\n",
+    "Edge.Cuts": "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.1*%\nD10*\nX0Y0D02*\nX10000000Y0D01*\nX10000000Y10000000D01*\nX0Y0D01*\nM02*\n",
+}
+DRILL = "M48\nMETRIC\nT1C0.800\n%\nG90\nG05\nT1\nX0.0Y0.0\nX2.54Y0.0\nM30\n"
+
+if not os.path.isfile(board):
+    print("Board file does not exist")
+    sys.exit(2)
+
+if args[:3] == ["pcb", "export", "gerber"]:
+    if os.environ.get("FAKE_NO_SINGLE_GERBER"):
+        print("Unknown command")
+        sys.exit(1)
+    with open(opt("--output"), "w") as fh:
+        fh.write(GERBERS[opt("--layers")])
+elif args[:3] == ["pcb", "export", "gerbers"]:
+    layer = opt("--layers")
+    out = os.path.join(opt("--output"), "{}-{}.gbr".format(stem, layer.replace(".", "_")))
+    with open(out, "w") as fh:
+        fh.write(GERBERS[layer])
+elif args[:3] == ["pcb", "export", "drill"]:
+    with open(os.path.join(opt("--output"), stem + ".drl"), "w") as fh:
+        fh.write(DRILL)
+else:
+    print("unexpected arguments: " + " ".join(args))
+    sys.exit(1)

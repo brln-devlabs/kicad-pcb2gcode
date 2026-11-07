@@ -1,0 +1,22 @@
+{
+  "$schema": "https://go.kicad.org/api/schemas/v1",
+  "identifier": "com.github.brln-devlabs.kicad-pcb2gcode",
+  "name": "pcb2gcode",
+  "description": "Generate CNC isolation-milling, drilling and outline G-code with pcb2gcode",
+  "runtime": {
+    "type": "python",
+    "min_version": "3.9"
+  },
+  "actions": [
+    {
+      "identifier": "generate-gcode",
+      "name": "pcb2gcode: Generate G-code",
+      "description": "Export the board and create milling G-code with pcb2gcode",
+      "show-button": true,
+      "scopes": ["pcb"],
+      "entrypoint": "ipc_entry.py",
+      "icons-light": ["icons/icon-light-24.png", "icons/icon-light-48.png"],
+      "icons-dark": ["icons/icon-dark-24.png", "icons/icon-dark-48.png"]
+    }
+  ]
+}

@@ -10,7 +10,7 @@ from typing import Optional
 
 from . import __version__
 from .boardfile import drill_origin, read_board
-from .export import find_kicad_cli, find_pcb2gcode
+from .export import find_kicad_cli, locate_pcb2gcode
 from .i18n import tr
 from .job import CAM_SUBDIR, JobError, JobRequest, JobResult, Log, run_job
 from .settings import AppConfig, Settings, load_board_settings, load_config, save_board_settings
@@ -69,9 +69,13 @@ class BoardContext:
 
 def build_request(ctx: BoardContext, settings: Settings, cfg: AppConfig, log: Log) -> JobRequest:
     kicad_cli = find_kicad_cli(ctx.kicad_cli) or ""
-    pcb2gcode = find_pcb2gcode(cfg.pcb2gcode_path) or ""
+    located = locate_pcb2gcode(cfg.pcb2gcode_path)
+    pcb2gcode = located.path or ""
     if cfg.pcb2gcode_path and pcb2gcode and os.path.abspath(pcb2gcode) != os.path.abspath(os.path.expanduser(cfg.pcb2gcode_path)):
         log(tr("Configured pcb2gcode not usable, using {}", "Konfiguriertes pcb2gcode nicht nutzbar, verwende {}").format(pcb2gcode))
+    if pcb2gcode:
+        log(tr("pcb2gcode: {}{}", "pcb2gcode: {}{}").format(
+            pcb2gcode, tr(" (outside the Flatpak sandbox)", " (außerhalb der Flatpak-Sandbox)") if located.host else ""))
     return JobRequest(
         board_file=ctx.board_to_export(settings, log),
         board_name=ctx.board_name,
@@ -79,6 +83,8 @@ def build_request(ctx: BoardContext, settings: Settings, cfg: AppConfig, log: Lo
         kicad_cli=kicad_cli,
         pcb2gcode=pcb2gcode,
         settings=settings.copy(),
+        pcb2gcode_host=located.host,
+        pcb2gcode_searched=located.searched,
     )
 
 

@@ -233,7 +233,13 @@ python -m kicad_pcb2gcode path/to/board.kicad_pcb [--sides back] [--no-outline] 
   sometimes fails to create the plugin environment; try
   **Preferences → Plugins → Recreate Plugin Environment** and make sure
   `python3 -m venv` works on your system.
-* **"pcb2gcode not found"** – set the program path in the **General** tab.
+* **"pcb2gcode not found"** – the plugin also asks a login shell, so PATH
+  additions from `~/.bashrc`/`~/.profile` count; otherwise set the program
+  path in the **General** tab (`command -v pcb2gcode` shows it). With KiCad
+  as a **Flatpak** the plugin runs in a sandbox and starts pcb2gcode on the
+  host via `flatpak-spawn --host`, which needs one permission:
+  `flatpak override --user --talk-name=org.freedesktop.Flatpak org.kicad.KiCad`
+  (then restart KiCad).
 * **Nothing happens / no window** – without wxPython the plugin runs with the
   saved settings and writes `gcode/kicad-pcb2gcode.log`. Install wxPython
   (Linux: `python3-wxgtk4.0`).

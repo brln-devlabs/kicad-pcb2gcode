@@ -9,7 +9,9 @@ from __future__ import annotations
 import glob
 import os
 import shutil
+import subprocess
 import sys
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 COPPER_LAYERS = {"front": "F.Cu", "back": "B.Cu"}
@@ -145,6 +147,50 @@ def find_kicad_cli(preferred: Optional[str] = None) -> Optional[str]:
     return None
 
 
+def in_flatpak() -> bool:
+    """True when running inside a Flatpak sandbox (KiCad from Flathub)."""
+    return os.path.exists("/.flatpak-info") or "FLATPAK_ID" in os.environ
+
+
+def _quiet(cmd: List[str], timeout: float) -> str:
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                                text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return result.stdout if result.returncode == 0 else ""
+
+
+def _last_path(output: str) -> Optional[str]:
+    for line in reversed(output.splitlines()):
+        line = line.strip()
+        if line.startswith("/"):
+            return line
+    return None
+
+
+def login_shell_lookup(name: str) -> Optional[str]:
+    """Look ``name`` up the way a terminal would. Programs started from the
+    desktop menu do not see PATH additions from ~/.bashrc or ~/.profile."""
+    if sys.platform == "win32" or in_flatpak():
+        return None
+    shell = os.environ.get("SHELL") or "/bin/sh"
+    for flag in ("-lc", "-ic"):
+        found = _last_path(_quiet([shell, flag, "command -v " + name], timeout=5))
+        if found and _is_executable(found):
+            return found
+    return None
+
+
+def host_lookup(name: str) -> Optional[str]:
+    """From inside a Flatpak: where ``name`` lives on the host system."""
+    return _last_path(_quiet(["flatpak-spawn", "--host", "sh", "-lc", "command -v " + name], timeout=10))
+
+
+def host_is_executable(path: str) -> bool:
+    return bool(_quiet(["flatpak-spawn", "--host", "sh", "-c", 'test -x "$1" && echo yes', "sh", path], timeout=10))
+
+
 def pcb2gcode_candidates(configured: str = "") -> List[str]:
     candidates = []
     if configured:
@@ -152,6 +198,7 @@ def pcb2gcode_candidates(configured: str = "") -> List[str]:
     found = shutil.which("pcb2gcode")
     if found:
         candidates.append(found)
+    home = os.path.expanduser("~")
     if sys.platform == "win32":
         for root in (os.environ.get("ProgramFiles"), os.environ.get("LOCALAPPDATA"), r"C:\Program Files"):
             if root:
@@ -160,12 +207,50 @@ def pcb2gcode_candidates(configured: str = "") -> List[str]:
     elif sys.platform == "darwin":
         candidates.extend(["/opt/homebrew/bin/pcb2gcode", "/usr/local/bin/pcb2gcode"])
     else:
-        candidates.extend(["/usr/bin/pcb2gcode", "/usr/local/bin/pcb2gcode", os.path.expanduser("~/.local/bin/pcb2gcode")])
-    return candidates
+        candidates.extend([
+            "/usr/bin/pcb2gcode",
+            "/usr/local/bin/pcb2gcode",
+            os.path.join(home, ".local", "bin", "pcb2gcode"),
+            os.path.join(home, "bin", "pcb2gcode"),
+            "/home/linuxbrew/.linuxbrew/bin/pcb2gcode",
+            os.path.join(home, ".linuxbrew", "bin", "pcb2gcode"),
+            "/opt/pcb2gcode/bin/pcb2gcode",
+        ])
+    return list(dict.fromkeys(candidates))
+
+
+@dataclass
+class Located:
+    """Where pcb2gcode was found; ``host`` means outside the Flatpak sandbox,
+    to be started with ``flatpak-spawn --host``."""
+
+    path: Optional[str]
+    host: bool = False
+    searched: List[str] = field(default_factory=list)
+
+    def command(self, cwd: str, *args: str) -> List[str]:
+        if self.host:
+            return ["flatpak-spawn", "--host", "--directory=" + cwd, self.path or "pcb2gcode", *args]
+        return [self.path or "pcb2gcode", *args]
+
+
+def locate_pcb2gcode(configured: str = "") -> Located:
+    candidates = pcb2gcode_candidates(configured)
+    for path in candidates:
+        if _is_executable(path):
+            return Located(path, searched=candidates)
+    found = login_shell_lookup("pcb2gcode")
+    if found:
+        return Located(found, searched=candidates)
+    if in_flatpak():
+        configured_path = os.path.expanduser(configured) if configured else ""
+        if configured_path and host_is_executable(configured_path):
+            return Located(configured_path, host=True, searched=candidates)
+        found = host_lookup("pcb2gcode")
+        if found:
+            return Located(found, host=True, searched=candidates)
+    return Located(None, searched=candidates)
 
 
 def find_pcb2gcode(configured: str = "") -> Optional[str]:
-    for path in pcb2gcode_candidates(configured):
-        if _is_executable(path):
-            return path
-    return None
+    return locate_pcb2gcode(configured).path

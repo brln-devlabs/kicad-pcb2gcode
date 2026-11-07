@@ -53,6 +53,8 @@ class JobRequest:
     kicad_cli: str
     pcb2gcode: str
     settings: Settings
+    pcb2gcode_host: bool = False  # outside a Flatpak sandbox, via flatpak-spawn --host
+    pcb2gcode_searched: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -459,6 +461,34 @@ MASK_PROJECT = "millproject_mask"
 NPTH_PROJECT = "millproject_npth"
 
 
+def pcb2gcode_command(req: JobRequest, *args: str) -> List[str]:
+    if req.pcb2gcode_host:
+        return ["flatpak-spawn", "--host", "--directory=" + req.output_dir, req.pcb2gcode, *args]
+    return [req.pcb2gcode, *args]
+
+
+def pcb2gcode_missing_message(searched: List[str]) -> str:
+    from .export import in_flatpak
+
+    lines = [tr("pcb2gcode not found.", "pcb2gcode nicht gefunden.")]
+    if in_flatpak():
+        lines.append(tr(
+            "KiCad runs as a Flatpak and cannot see programs installed on the system. Allow it to start them "
+            "once in a terminal, then restart KiCad:",
+            "KiCad läuft als Flatpak und sieht im System installierte Programme nicht. Einmal im Terminal "
+            "erlauben und KiCad neu starten:"))
+        lines.append("  flatpak override --user --talk-name=org.freedesktop.Flatpak org.kicad.KiCad")
+    else:
+        lines.append(tr(
+            "Enter its full path under General > Program (in a terminal: command -v pcb2gcode).",
+            "Den vollständigen Pfad unter Allgemein > Programm eintragen (im Terminal: command -v pcb2gcode)."))
+    if searched:
+        lines.append(tr("Searched:", "Gesucht in:"))
+        lines += ["  " + path for path in searched]
+    lines.append("PATH=" + os.environ.get("PATH", ""))
+    return "\n".join(lines)
+
+
 def _run_pcb2gcode(req: JobRequest, cmd: List[str], log: Log) -> None:
     code = _run(cmd, log, cwd=req.output_dir)
     if code != 0:
@@ -477,10 +507,7 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
     if not req.kicad_cli:
         raise JobError(tr("kicad-cli not found.", "kicad-cli nicht gefunden."))
     if not req.pcb2gcode:
-        raise JobError(tr(
-            "pcb2gcode not found. Install it or set its path in the settings.",
-            "pcb2gcode nicht gefunden. Bitte installieren oder den Pfad in den Einstellungen angeben.",
-        ))
+        raise JobError(pcb2gcode_missing_message(req.pcb2gcode_searched))
     if not os.path.isfile(req.board_file):
         raise JobError(tr("Board file not found: {}", "Board-Datei nicht gefunden: {}").format(req.board_file))
 
@@ -524,10 +551,10 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
     for config, _, _, _, label in runs:
         if config == "millproject":
             log(tr("Running pcb2gcode ...", "Starte pcb2gcode ..."))
-            _run_pcb2gcode(req, [req.pcb2gcode], log)
+            _run_pcb2gcode(req, pcb2gcode_command(req), log)
         else:
             log(tr("Running pcb2gcode ({}) ...", "Starte pcb2gcode ({}) ...").format(label.rstrip(": ")))
-            _run_pcb2gcode(req, [req.pcb2gcode, "--config", config], log)
+            _run_pcb2gcode(req, pcb2gcode_command(req, "--config", config), log)
         # pcb2gcode's SVG names carry no board name: keep each run's images apart
         preview.collect_run(req.output_dir, run_keys[config])
 

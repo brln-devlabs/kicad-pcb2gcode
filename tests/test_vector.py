@@ -105,3 +105,55 @@ def test_large_image_prepares_quickly():
     items = vector.build_scene(shapes, (2000, 12))
     assert time.perf_counter() - start < 5
     assert len(items) == 256 + 1 and vector.segment_count(items) == 4000 * 60
+
+
+def test_decimate_keeps_shape_within_tolerance():
+    import math
+
+    # a circle of radius 10 with 400 points, as one polyline
+    pts = [(10 * math.cos(a * 2 * math.pi / 400), 10 * math.sin(a * 2 * math.pi / 400)) for a in range(401)]
+    full = vector.sub_path(line_points(*pts), False, 1e-9)
+    coarse = vector.decimate(full, 0.05)
+    assert coarse[1] == full[1] and coarse[2][-1] == full[2][-1]  # start and end kept
+    assert len(coarse[2]) < len(full[2]) / 5
+    # every dropped point stays within the tolerance of the kept polyline
+    kept = [coarse[1]] + [s[-2:] for s in coarse[2]]
+    for x, y in pts:
+        d = min(abs(math.hypot(x - kx, y - ky)) for kx, ky in kept)
+        seg = min(_dist_to_segment((x, y), a, b) for a, b in zip(kept, kept[1:]))
+        assert min(d, seg) <= 0.05 + 1e-9
+    assert vector.decimate(full, 0) is full
+
+
+def _dist_to_segment(p, a, b):
+    import math
+
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    dx, dy = bx - ax, by - ay
+    L = dx * dx + dy * dy
+    t = 0 if L == 0 else max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / L))
+    return math.hypot(px - ax - t * dx, py - ay - t * dy)
+
+
+def test_scene_levels_and_layers():
+    long_pts = line_points(*[(k * 0.5, (k % 2) * 0.001) for k in range(2000)])  # 1000 units long, nearly straight
+    zigzag = line_points(*[(k * 0.5, (k % 2) * 2.0) for k in range(2000)])
+    shapes = [
+        shape([path(zigzag)], stroke=(10, 20, 200, 128), width=3),            # translucent tool path
+        shape([path(long_pts)], stroke=(0, 0, 0, 255), width=0.1),            # opaque centre line
+        shape([path(line_points((0, 0), (5, 0), (5, 5), (0, 0)), True)], fill=(1, 2, 3, 255), width=0),
+    ]
+    scene = vector.Scene.from_shapes(shapes, (1000, 10))
+    assert scene.level_for(1000) == vector.LEVELS  # deep zoom: every point
+    fit = scene.level_for(0.5)
+    assert fit < vector.LEVELS
+    groups = scene.groups(fit)
+    tool, centre, fill = groups
+    # the long paths are cut into pieces sorted into cells along the board
+    assert len(tool.parts) > 1 and all(part.bounds[2] - part.bounds[0] < 1000 for part in tool.parts)
+    assert tool.layer == 128 / 255  # pieces drawn opaque into one half-transparent layer
+    assert centre.layer == 1.0
+    assert fill.layer == 1.0 and len(fill.parts) == 1
+    coarse = sum(len(seg) for part in centre.parts for _, _, seg in part.paths)
+    assert coarse < 1999 / 10  # nearly straight: almost all points dropped
+    assert scene.groups(fit) is groups  # built once

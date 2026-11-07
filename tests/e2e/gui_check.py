@@ -79,34 +79,66 @@ def paint_ms():
 
 
 print("---- preview drawing (canvas {}x{}) ----".format(*panel.canvas.GetClientSize()))
+
+
+class Idle:
+    def RequestMore(self, more=True):
+        self.more = True
+
+
+def idle_until_done(limit_s=20.0):
+    t = time.perf_counter()
+    while time.perf_counter() - t < limit_s:
+        ev = Idle()
+        ev.more = False
+        panel.on_idle(ev)
+        if not ev.more:
+            break
+    return (time.perf_counter() - t) * 1000
+
+
+def stats(xs):
+    return "avg {:5.1f} max {:5.1f}".format(sum(xs) / max(len(xs), 1), max(xs or [0]))
+
+
 for index, (label, path) in enumerate(panel.entries):
     panel.choice.SetSelection(index)
     t = time.perf_counter()
     panel._load()
     prep = (time.perf_counter() - t) * 1000
-    scene = panel._scene
-    items = len(scene.items) if scene else 0
-    segs = sum(len(seg) + 1 for item, *_ in (scene.items if scene else []) for _, _, seg in item.paths)
-    fit_ms = snapshot("preview_{:02d}_fit".format(index))
-    # glide in by 4 notches around the centre, timing every frame
     w, h = panel.canvas.GetClientSize()
+    first = snapshot("preview_{:02d}_fit".format(index))
+    heavy = panel._heavy
+    prefetch = idle_until_done() if heavy else 0.0
+    rest = paint_ms()
+    # glide in by 4 notches; one idle step between frames, as in the event loop
     panel.on_wheel(NS(GetPosition=lambda: (w // 3, h // 2), GetWheelRotation=lambda: 480, GetWheelDelta=lambda: 120))
     frames = []
+    k = 0
     while panel._anim.IsRunning():
         time.sleep(0.01)
         panel.on_frame(None)
-        frames.append(paint_ms())
-    zoom_ms = snapshot("preview_{:02d}_zoom".format(index))
+        if k == 3:
+            frames.append(snapshot("preview_{:02d}_glide".format(index)))
+        else:
+            frames.append(paint_ms())
+        k += 1
+        ev = Idle()
+        ev.more = False
+        panel.on_idle(ev)
+    settle = snapshot("preview_{:02d}_zoom".format(index))
+    if heavy:
+        idle_until_done()
     panel.on_press(NS(GetPosition=lambda: (200, 200)))
     drags = []
     for k in range(20):
         panel.on_motion(NS(GetPosition=lambda: (200 - 10 * k, 200 - 5 * k), Dragging=lambda: True))
         drags.append(paint_ms())
     panel.on_release(None)
-    print("  {:<40} prep {:6.0f} ms, {:5d} items, {:7d} segments | paint fit {:5.1f} ms, "
-          "zoom frames {} avg {:5.1f} max {:5.1f} ms, drag avg {:5.1f} ms".format(
-              label[:40], prep, items, segs, fit_ms, len(frames),
-              sum(frames) / max(len(frames), 1), max(frames or [0]), sum(drags) / len(drags)))
+    print("  {:<32} prep {:5.0f} ms | first {:6.1f} ms {} prefetch {:6.0f} ms rest {:5.1f} | "
+          "glide {} frames {} | settle {:6.1f} | drag {}".format(
+              label[:32], prep, first, "HEAVY" if heavy else "light", prefetch, rest, len(frames),
+              stats(frames), settle, stats(drags)))
     panel.fit()
 
 dlg.SetSize(wx.Size(1300, 800))

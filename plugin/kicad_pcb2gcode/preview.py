@@ -159,3 +159,70 @@ def ease_fraction(seconds: float, time_constant: float = 0.06) -> float:
     if seconds <= 0:
         return 0.0
     return 1.0 - math.exp(-seconds / time_constant)
+
+
+# -- tiles ------------------------------------------------------------------
+#
+# For heavy images the window keeps exact renderings in square tiles. Two
+# kinds: "exact" tiles at the current zoom, aligned to the screen pixels, so
+# moving the view just shows already drawn pixels; and a pyramid of zoom
+# levels sqrt(2) apart, used while the zoom glides. The pyramid level drawn is
+# always the next one at or above the current zoom, so its pixels are only
+# ever shrunk (by at most sqrt(2)), never enlarged.
+
+TILE = 256
+
+
+def pyramid_scale(base: float, level: int) -> float:
+    return base * 2.0 ** (level / 2.0)
+
+
+def pyramid_level(scale: float, base: float) -> int:
+    """Lowest pyramid level whose scale is at least ``scale``."""
+    import math
+
+    if scale <= 0 or base <= 0:
+        return 0
+    return int(math.ceil(2.0 * math.log2(scale / base) - 1e-9))
+
+
+def _tile_span(lo: float, hi: float, size: int = TILE) -> range:
+    import math
+
+    if hi <= lo:
+        return range(0)
+    return range(int(math.floor(lo / size)), int(math.floor((hi - 1e-9) / size)) + 1)
+
+
+def pyramid_tiles(view: Tuple[float, float, float, float], level_scale: float,
+                  image_w: float, image_h: float) -> List[Tuple[int, int]]:
+    """Pyramid tiles (tx, ty) at ``level_scale`` covering ``view`` (image
+    coordinates), limited to the image."""
+    x0, y0 = max(view[0], 0.0) * level_scale, max(view[1], 0.0) * level_scale
+    x1, y1 = min(view[2], image_w) * level_scale, min(view[3], image_h) * level_scale
+    return [(tx, ty) for ty in _tile_span(y0, y1) for tx in _tile_span(x0, x1)]
+
+
+def exact_grid(origin: Tuple[float, float]):
+    """(integer screen offset, fraction) of the screen-aligned tile grid for a
+    view whose image (0, 0) lies at ``origin``. Moving the view by whole pixels
+    keeps the fraction, so the tiles stay valid."""
+    import math
+
+    ix, iy = math.floor(origin[0]), math.floor(origin[1])
+    return (ix, iy), (round(origin[0] - ix, 6), round(origin[1] - iy, 6))
+
+
+def exact_tiles(origin: Tuple[float, float], scale: float, view_w: float, view_h: float,
+                image_w: float, image_h: float, margin: int = 0) -> List[Tuple[int, int]]:
+    """Screen-aligned tiles covering the window (plus ``margin`` tiles around),
+    limited to the image, nearest to the window centre first."""
+    (ix, iy), (fx, fy) = exact_grid(origin)
+    x0 = max(-ix - margin * TILE, fx)
+    y0 = max(-iy - margin * TILE, fy)
+    x1 = min(view_w - ix + margin * TILE, fx + image_w * scale)
+    y1 = min(view_h - iy + margin * TILE, fy + image_h * scale)
+    tiles = [(tx, ty) for ty in _tile_span(y0, y1) for tx in _tile_span(x0, x1)]
+    cx, cy = view_w / 2.0 - ix, view_h / 2.0 - iy
+    tiles.sort(key=lambda t: ((t[0] + 0.5) * TILE - cx) ** 2 + ((t[1] + 0.5) * TILE - cy) ** 2)
+    return tiles

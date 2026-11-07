@@ -192,3 +192,171 @@ def view_rect(origin: Tuple[float, float], scale: float, width: float, height: f
 
 def segment_count(items: Iterable[Item]) -> int:
     return sum(len(segs) + 1 for item in items for _, _, segs in item.paths)
+
+
+# -- level of detail ------------------------------------------------------------
+#
+# A pcb2gcode image holds a few very long tool paths with tens of thousands of
+# points; zoomed out, most points are closer together than a screen pixel.
+# Each level keeps only the points needed for a given accuracy, and cuts the
+# outlines into pieces sorted into a grid, so that zoomed in only the pieces
+# in view are drawn. Pieces of a semi-transparent outline are drawn opaque
+# into a layer that is then blended once: overlapping pieces do not get darker
+# where they meet, exactly as when the whole outline is stroked at once.
+
+MAX_ERROR_PX = 0.4  # allowed deviation on screen
+LEVELS = 7  # level k keeps points to span / 1200 / 2**k; level LEVELS keeps all
+GRID = 16  # cells per side for sorting outline pieces
+PIECE = 64  # segments per outline piece
+
+
+@dataclass
+class Part:
+    bounds: List[float]
+    paths: List[SubPath]
+
+
+@dataclass
+class Group:
+    """What one drawing item becomes at one level."""
+
+    style: Style
+    layer: float  # 1.0: draw directly; below: draw opaque into a layer of this opacity
+    bounds: List[float]
+    parts: List[Part]
+
+
+def decimate(path: SubPath, tolerance: float, window: int = 48) -> SubPath:
+    """Drop points of straight runs that stay within ``tolerance`` of the
+    line through the points kept (a greedy, one-pass simplification).
+    Curves, the start and the end are always kept."""
+    closed, start, segments = path
+    if tolerance <= 0 or len(segments) < 3:
+        return path
+    t2 = tolerance * tolerance
+    out: List[Segment] = []
+    ax, ay = start
+    pending: List[Tuple[float, float]] = []
+    for seg in segments:
+        if len(seg) != 2:  # a real curve: flush and keep it
+            if pending:
+                out.append(pending[-1])
+                pending = []
+            out.append(seg)
+            ax, ay = seg[4], seg[5]
+            continue
+        x, y = seg
+        pending.append((x, y))
+        if len(pending) == 1:
+            continue
+        dx, dy = x - ax, y - ay
+        length2 = dx * dx + dy * dy
+        fits = len(pending) <= window
+        if fits:
+            for px, py in pending[:-1]:
+                cross = (px - ax) * dy - (py - ay) * dx
+                if cross * cross > t2 * length2:
+                    fits = False
+                    break
+        if not fits:
+            keep = pending[-2]
+            out.append(keep)
+            ax, ay = keep
+            pending = [(x, y)]
+    if pending:
+        out.append(pending[-1])
+    return closed, start, out
+
+
+def _path_bounds(paths: List[SubPath], margin: float) -> List[float]:
+    xs: List[float] = []
+    ys: List[float] = []
+    for _, (sx, sy), segs in paths:
+        xs.append(sx)
+        ys.append(sy)
+        for s in segs:
+            xs.append(s[-2])
+            ys.append(s[-1])
+            if len(s) == 6:
+                xs.extend((s[0], s[2]))
+                ys.extend((s[1], s[3]))
+    if not xs:
+        return [0.0, 0.0, 0.0, 0.0]
+    return [min(xs) - margin, min(ys) - margin, max(xs) + margin, max(ys) + margin]
+
+
+def _pieces(path: SubPath, size: int) -> List[SubPath]:
+    closed, start, segments = path
+    if len(segments) <= size:
+        return [path]
+    out = []
+    current = start
+    for i in range(0, len(segments), size):
+        chunk = segments[i:i + size]
+        out.append((False, current, chunk))
+        current = (chunk[-1][-2], chunk[-1][-1])
+    if closed:  # close the ring with a last line back to the start
+        out[-1][2].append(start)
+    return out
+
+
+class Scene:
+    """Drawing items of one image, at several levels of detail (built on demand)."""
+
+    def __init__(self, items: List[Item], image_size: Tuple[float, float]):
+        self.items = items
+        self.width, self.height = image_size
+        self.span = max(image_size[0], image_size[1], 1e-9)
+        self._levels: dict = {}
+
+    @classmethod
+    def from_shapes(cls, shapes: Iterable, image_size: Tuple[float, float]) -> "Scene":
+        return cls(build_scene(shapes, image_size), image_size)
+
+    def tolerance(self, level: int) -> float:
+        return 0.0 if level >= LEVELS else self.span / 1200.0 / 2 ** level
+
+    def level_for(self, scale: float) -> int:
+        """The coarsest level that is still exact to MAX_ERROR_PX on screen."""
+        for level in range(LEVELS):
+            if self.tolerance(level) * scale <= MAX_ERROR_PX:
+                return level
+        return LEVELS
+
+    def has_level(self, level: int) -> bool:
+        return level in self._levels
+
+    def groups(self, level: int) -> List[Group]:
+        if level not in self._levels:
+            self._levels[level] = self._build(level)
+        return self._levels[level]
+
+    def _build(self, level: int) -> List[Group]:
+        tol = self.tolerance(level)
+        cell_w = self.width / GRID or 1.0
+        cell_h = self.height / GRID or 1.0
+        groups = []
+        for item in self.items:
+            style = item.style
+            paths = [decimate(p, tol) for p in item.paths] if tol else item.paths
+            margin = style.width
+            if style.fill is not None:
+                groups.append(Group(style, 1.0, list(item.bounds), [Part(list(item.bounds), paths)]))
+                continue
+            cells: dict = {}
+            for path in paths:
+                for piece in _pieces(path, PIECE):
+                    b = _path_bounds([piece], margin)
+                    key = (int(((b[0] + b[2]) / 2) // cell_w), int(((b[1] + b[3]) / 2) // cell_h))
+                    cell = cells.get(key)
+                    if cell is None:
+                        cells[key] = Part(b, [piece])
+                    else:
+                        cell.paths.append(piece)
+                        cb = cell.bounds
+                        cell.bounds = [min(cb[0], b[0]), min(cb[1], b[1]), max(cb[2], b[2]), max(cb[3], b[3])]
+            alpha = style.stroke[3] if style.stroke else 255
+            # one part is one stroke, which blends overlaps once anyway
+            layer = alpha / 255.0 if alpha < 255 and len(cells) > 1 else 1.0
+            groups.append(Group(style, layer, list(item.bounds), list(cells.values())))
+        return groups

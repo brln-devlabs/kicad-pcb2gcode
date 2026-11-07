@@ -62,7 +62,7 @@ jobs:
             rm -rf tests/e2e/gcode
           done
           # snapshots as text, to look at them without downloading the artifact
-          for f in out/gui-dense/preview_00_fit.png out/gui-dense/preview_00_zoom.png; do
+          for f in out/gui-dense/preview_00_fit.png out/gui-dense/preview_00_glide.png out/gui-dense/preview_00_zoom.png; do
             [ -f "$f" ] && { echo "PNG $f"; base64 -w0 "$f"; echo; }
           done
       - name: Dump preview SVGs (manual runs only)

@@ -13,6 +13,7 @@ import pathlib
 import threading
 import time
 import webbrowser
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple
 
 import wx
@@ -30,7 +31,8 @@ from .form import PAGES, Field, Heading, Row, format_number, parse_number, label
 from .i18n import tr
 from .job import JobError
 from . import vector
-from .preview import ease_fraction, ease_scale, fit_view, list_previews, wheel_factor, zoom_at
+from .preview import (MAX_ZOOM, MIN_ZOOM, TILE, ease_fraction, ease_scale, exact_grid, exact_tiles, fit_view,
+                      list_previews, pyramid_level, pyramid_scale, pyramid_tiles, wheel_factor, zoom_at)
 from .settings import AppConfig, Settings, save_config
 
 
@@ -38,68 +40,126 @@ from .settings import AppConfig, Settings, save_config
 
 
 class _WxScene:
-    """The preview image as ready-made ``wx.GraphicsPath`` objects with their
-    pens and brushes, built once per image and drawn as vectors every frame."""
+    """The preview image as ``wx.GraphicsPath`` objects with their pens and
+    brushes, per level of detail (see ``vector.Scene``), built on demand."""
+
+    THIN_PX = 3.0  # below this on-screen width round joins and caps look like plain ones
 
     def __init__(self, svg: Any):
-        renderer = wx.GraphicsRenderer.GetDefaultRenderer()
-        items = vector.build_scene(svg.shapes, (svg.width, svg.height))
-        pens: Dict[Any, Any] = {}
-        brushes: Dict[Any, Any] = {}
-        self.items: List[Tuple[vector.Item, Any, Any, Any, int]] = []
-        for item in items:
-            style = item.style
-            pen = brush = None
-            if style.stroke is not None:
-                key = (style.stroke, style.width, style.join, style.cap)
-                if key not in pens:
-                    pens[key] = self._pen(renderer, style)
-                pen = pens[key]
-            if style.fill is not None:
-                if style.fill not in brushes:
-                    brushes[style.fill] = renderer.CreateBrush(wx.Brush(wx.Colour(*style.fill)))
-                brush = brushes[style.fill]
-            path = renderer.CreatePath()
-            for closed, (sx, sy), segments in item.paths:
-                path.MoveToPoint(sx, sy)
-                for seg in segments:
-                    if len(seg) == 2:
-                        path.AddLineToPoint(seg[0], seg[1])
-                    else:
-                        path.AddCurveToPoint(*seg)
-                if closed:
-                    path.CloseSubpath()
-            rule = wx.ODDEVEN_RULE if style.evenodd else wx.WINDING_RULE
-            self.items.append((item, path, pen, brush, rule))
+        self.scene = vector.Scene.from_shapes(svg.shapes, (svg.width, svg.height))
+        self._renderer = wx.GraphicsRenderer.GetDefaultRenderer()
+        self._pens: Dict[Any, Any] = {}
+        self._brushes: Dict[Any, Any] = {}
+        self._levels: Dict[int, List[Tuple[Any, List[Tuple[Any, Any]]]]] = {}
+        self.level_for(1.0)  # fail early (and fall back) if this wx cannot build paths
 
-    @staticmethod
-    def _pen(renderer: Any, style: "vector.Style") -> Any:
-        colour = wx.Colour(*style.stroke)
-        join = {vector.JOIN_ROUND: wx.JOIN_ROUND, vector.JOIN_BEVEL: wx.JOIN_BEVEL}.get(style.join, wx.JOIN_MITER)
-        cap = {vector.CAP_ROUND: wx.CAP_ROUND, vector.CAP_SQUARE: wx.CAP_PROJECTING}.get(style.cap, wx.CAP_BUTT)
-        try:
-            return renderer.CreatePen(wx.GraphicsPenInfo(colour).Width(style.width).Join(join).Cap(cap))
-        except AttributeError:  # wx older than 3.1.1: integer widths only
-            pen = wx.Pen(colour, max(1, int(round(style.width))))
-            pen.SetJoin(join)
-            pen.SetCap(cap)
-            return renderer.CreatePen(pen)
+    def level_for(self, scale: float) -> int:
+        return self.scene.level_for(scale)
 
-    def draw(self, gc: Any, view: Tuple[float, float, float, float]) -> None:
-        current_pen = current_brush = None
-        for item, path, pen, brush, rule in self.items:
-            if not vector.visible(item, view):
+    def has_level(self, level: int) -> bool:
+        return level in self._levels
+
+    def level(self, level: int) -> List[Tuple[Any, List[Tuple[Any, Any]]]]:
+        if level not in self._levels:
+            self._levels[level] = [(group, [(part, self._path(part.paths)) for part in group.parts])
+                                   for group in self.scene.groups(level)]
+        return self._levels[level]
+
+    def _path(self, paths: List[Any]) -> Any:
+        path = self._renderer.CreatePath()
+        for closed, (sx, sy), segments in paths:
+            path.MoveToPoint(sx, sy)
+            for seg in segments:
+                if len(seg) == 2:
+                    path.AddLineToPoint(seg[0], seg[1])
+                else:
+                    path.AddCurveToPoint(*seg)
+            if closed:
+                path.CloseSubpath()
+        return path
+
+    def _brush(self, rgba: Tuple[int, int, int, int]) -> Any:
+        if rgba not in self._brushes:
+            self._brushes[rgba] = self._renderer.CreateBrush(wx.Brush(wx.Colour(*rgba)))
+        return self._brushes[rgba]
+
+    def _pen(self, style: "vector.Style", opaque: bool, thin: bool) -> Any:
+        key = (style.stroke, style.width, style.join, style.cap, opaque, thin)
+        if key not in self._pens:
+            r, g, b, a = style.stroke
+            colour = wx.Colour(r, g, b, 255 if opaque else a)
+            if thin:
+                join, cap = wx.JOIN_BEVEL, wx.CAP_BUTT
+            else:
+                join = {vector.JOIN_ROUND: wx.JOIN_ROUND, vector.JOIN_BEVEL: wx.JOIN_BEVEL}.get(style.join, wx.JOIN_MITER)
+                cap = {vector.CAP_ROUND: wx.CAP_ROUND, vector.CAP_SQUARE: wx.CAP_PROJECTING}.get(style.cap, wx.CAP_BUTT)
+            try:
+                pen = self._renderer.CreatePen(wx.GraphicsPenInfo(colour).Width(style.width).Join(join).Cap(cap))
+            except AttributeError:  # wx older than 3.1.1: integer widths only
+                plain = wx.Pen(colour, max(1, int(round(style.width))))
+                plain.SetJoin(join)
+                plain.SetCap(cap)
+                pen = self._renderer.CreatePen(plain)
+            self._pens[key] = pen
+        return self._pens[key]
+
+    def draw(self, gc: Any, view: Tuple[float, float, float, float], scale: float) -> None:
+        """Draw what lies in ``view`` (image coordinates); ``gc`` is already
+        transformed to image coordinates at ``scale``."""
+        for group, parts in self.level(self.level_for(scale)):
+            if not _touches(group.bounds, view):
                 continue
-            if brush is not None:
-                if brush is not current_brush:
-                    gc.SetBrush(brush)
-                    current_brush = brush
-                gc.FillPath(path, rule)
-            if pen is not None:
-                if pen is not current_pen:
-                    gc.SetPen(pen)
-                    current_pen = pen
-                gc.StrokePath(path)
+            visible = [(part, path) for part, path in parts if _touches(part.bounds, view)]
+            if not visible:
+                continue
+            style = group.style
+            layered = group.layer < 1.0
+            if layered:
+                gc.BeginLayer(group.layer)
+            if style.fill is not None:
+                gc.SetBrush(self._brush(style.fill))
+            if style.stroke is not None:
+                gc.SetPen(self._pen(style, layered, style.width * scale < self.THIN_PX))
+            rule = wx.ODDEVEN_RULE if style.evenodd else wx.WINDING_RULE
+            for _, path in visible:
+                if style.fill is not None:
+                    gc.FillPath(path, rule)
+                if style.stroke is not None:
+                    gc.StrokePath(path)
+            if layered:
+                gc.EndLayer()
+
+
+def _touches(b: List[float], view: Tuple[float, float, float, float]) -> bool:
+    return b[2] >= view[0] and b[0] <= view[2] and b[3] >= view[1] and b[1] <= view[3]
+
+
+class _Tiles:
+    """Rendered tiles of one image (see ``preview.TILE``), least recently used
+    dropped first."""
+
+    LIMIT = 400  # about 100 MB
+
+    def __init__(self) -> None:
+        self._tiles: "OrderedDict[Tuple, Any]" = OrderedDict()
+
+    def get(self, key: Tuple) -> Any:
+        bmp = self._tiles.get(key)
+        if bmp is not None:
+            self._tiles.move_to_end(key)
+        return bmp
+
+    def put(self, key: Tuple, bmp: Any) -> None:
+        self._tiles[key] = bmp
+        self._tiles.move_to_end(key)
+        while len(self._tiles) > self.LIMIT:
+            self._tiles.popitem(last=False)
+
+    def __contains__(self, key: Tuple) -> bool:
+        return key in self._tiles
+
+    def clear(self) -> None:
+        self._tiles.clear()
 
 
 class PreviewPanel(wx.Panel):
@@ -107,13 +167,21 @@ class PreviewPanel(wx.Panel):
     outline, solder mask and clearance problems, like pcb2gcodeGUI does.
 
     Mouse wheel zooms smoothly around the pointer, dragging with the left or
-    middle button moves the view, a double click fits the image again. Every
-    frame - also while zooming and dragging - is drawn as vectors from paths
-    prepared once per image (see ``vector``), so it is sharp at any zoom.
+    middle button moves the view, a double click fits the image again.
+
+    Light images are drawn as vectors in every frame. Heavy ones (a frame
+    would take longer than HEAVY_MS) are drawn from exact renderings kept in
+    tiles: at rest and while moving the view from tiles rendered at exactly
+    the current zoom - the same pixels a direct drawing gives - and while the
+    zoom glides from a pyramid of zoom levels at or above the current one.
+    Missing tiles are rendered when the window is idle.
     """
 
     FRAME_MS = 10
     CACHE = 8  # prepared images kept, so switching layers is instant
+    HEAVY_MS = 20.0
+    PAINT_BUDGET_MS = 12.0  # rendering of missing tiles allowed inside one paint
+    IDLE_BUDGET_MS = 15.0
 
     def __init__(self, parent: wx.Window):
         super().__init__(parent)
@@ -133,6 +201,11 @@ class PreviewPanel(wx.Panel):
         self._target = 1.0
         self._anchor: Optional[Tuple[Tuple[float, float], Tuple[float, float]]] = None
         self._last_frame = 0.0
+        # heavy images: tiles, the pyramid's base scale, the time of a direct frame
+        self._tiles = _Tiles()
+        self._heavy = False
+        self._base = 1.0
+        self.last_frame_ms = 0.0
 
         title = wx.StaticText(self, label=tr("Preview", "Vorschau"))
         font = title.GetFont()
@@ -175,6 +248,7 @@ class PreviewPanel(wx.Panel):
         self.canvas.Bind(wx.EVT_MOTION, self.on_motion)
         self.canvas.Bind(wx.EVT_LEFT_DCLICK, lambda evt: self.fit())
         self.canvas.Bind(wx.EVT_MOUSE_CAPTURE_LOST, lambda evt: self._end_drag())
+        self.Bind(wx.EVT_IDLE, self.on_idle)
         self.Bind(wx.EVT_WINDOW_DESTROY, self.on_destroy)
         self.show([])
 
@@ -199,6 +273,8 @@ class PreviewPanel(wx.Panel):
         self._path = self.entries[index][1] if self.entries and index >= 0 else ""
         self._svg = None
         self._scene = None
+        self._tiles.clear()
+        self._heavy = False
         if self._path and HAVE_SVG:
             try:
                 self._svg = wx.svg.SVGimage.CreateFromFile(self._path)
@@ -207,6 +283,8 @@ class PreviewPanel(wx.Panel):
             if self._has_image():
                 self._scene = self._prepare(self._path)
         self.fit()
+        if self._has_image():
+            self._base = self._fit_scale
 
     def _prepare(self, path: str) -> Optional[_WxScene]:
         """Paths of the image, from the cache when the file is unchanged."""
@@ -314,6 +392,7 @@ class PreviewPanel(wx.Panel):
             return
         (sx, sy), (ox, oy) = self._drag
         x, y = event.GetPosition()
+        # whole pixels, so the screen-aligned tiles stay valid
         self._origin = (ox + x - sx, oy + y - sy)
         self._fitted = False
         self._redraw()
@@ -348,21 +427,175 @@ class PreviewPanel(wx.Panel):
             dc.SetTextForeground(wx.Colour(120, 120, 120))
             dc.DrawLabel(self._message(), wx.Rect(0, 0, width, height), wx.ALIGN_CENTER)
             return
-        gc = wx.GraphicsContext.Create(dc)
-        if gc is not None:
-            gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
-            gc.Translate(self._origin[0], self._origin[1])
-            gc.Scale(self._scale, self._scale)
-            if self._scene is not None:
-                self._scene.draw(gc, vector.view_rect(self._origin, self._scale, width, height))
-            else:
-                self._svg.RenderToGC(gc)
-            del gc
+        if self._heavy and self._scene is not None:
+            self._draw_tiled(dc, width, height)
+        else:
+            start = time.perf_counter()
+            self._draw_direct(dc, width, height)
+            self.last_frame_ms = (time.perf_counter() - start) * 1000.0
+            if self._scene is not None and self.last_frame_ms > self.HEAVY_MS and self._tiles_usable():
+                self._heavy = True
         if not self._fitted:
             zoom = "{:.0f} %".format(100.0 * self._scale / self._fit_scale)
             dc.SetTextForeground(wx.Colour(120, 120, 120))
             tw, th = dc.GetTextExtent(zoom)
             dc.DrawText(zoom, width - tw - 6, height - th - 4)
+
+    def _tiles_usable(self) -> bool:
+        try:  # tiles are drawn at window pixels; a HiDPI window gets direct drawing
+            return float(self.canvas.GetContentScaleFactor()) == 1.0
+        except Exception:
+            return True
+
+    def _draw_direct(self, dc: wx.DC, width: int, height: int) -> None:
+        gc = wx.GraphicsContext.Create(dc)
+        if gc is None:
+            return
+        gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
+        gc.Translate(self._origin[0], self._origin[1])
+        gc.Scale(self._scale, self._scale)
+        if self._scene is not None:
+            self._scene.draw(gc, vector.view_rect(self._origin, self._scale, width, height), self._scale)
+        else:
+            self._svg.RenderToGC(gc)
+        del gc
+
+    # -- tiles ------------------------------------------------------------
+
+    def _render(self, offset: Tuple[float, float], scale: float) -> wx.Bitmap:
+        """One tile: the image drawn with its (0, 0) at ``offset``."""
+        bmp = wx.Bitmap(TILE, TILE)
+        mdc = wx.MemoryDC(bmp)
+        mdc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
+        mdc.Clear()
+        gc = wx.GraphicsContext.Create(mdc)
+        if gc is not None:
+            gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
+            gc.Translate(offset[0], offset[1])
+            gc.Scale(scale, scale)
+            self._scene.draw(gc, vector.view_rect(offset, scale, TILE, TILE), scale)
+            del gc
+        mdc.SelectObject(wx.NullBitmap)
+        return bmp
+
+    def _exact_key(self, tx: int, ty: int) -> Tuple:
+        _, frac = exact_grid(self._origin)
+        return ("e", round(self._scale, 9), frac, tx, ty)
+
+    def _render_key(self, key: Tuple) -> None:
+        if key in self._tiles:
+            return
+        if key[0] == "e":
+            _, scale, (fx, fy), tx, ty = key
+            self._tiles.put(key, self._render((fx - tx * TILE, fy - ty * TILE), scale))
+        else:
+            _, level, tx, ty = key
+            self._tiles.put(key, self._render((-tx * TILE, -ty * TILE), pyramid_scale(self._base, level)))
+
+    def _pyramid_keys(self, level: int, view: Tuple[float, float, float, float]) -> List[Tuple]:
+        scale = pyramid_scale(self._base, level)
+        return [("p", level, tx, ty)
+                for tx, ty in pyramid_tiles(view, scale, self._svg.width, self._svg.height)]
+
+    def _draw_pyramid(self, gc: Any, view: Tuple[float, float, float, float], budget_end: float) -> None:
+        """Pyramid tiles for the view, scaled to the current zoom: the level at
+        or above the zoom, over neighbouring levels where it is not rendered
+        yet; a spot no level has is drawn directly."""
+        level = pyramid_level(self._scale, self._base)
+        fallbacks = (level - 2, level - 1, level + 1)
+        for lv in fallbacks + (level,):
+            ratio = self._scale / pyramid_scale(self._base, lv)
+            for key in self._pyramid_keys(lv, view):
+                bmp = self._tiles.get(key)
+                if bmp is None and lv == level and time.perf_counter() < budget_end:
+                    self._render_key(key)
+                    bmp = self._tiles.get(key)
+                if bmp is None:
+                    continue
+                _, _, tx, ty = key
+                gc.DrawBitmap(bmp, self._origin[0] + tx * TILE * ratio, self._origin[1] + ty * TILE * ratio,
+                              TILE * ratio, TILE * ratio)
+        # holes: tiles of the level that are missing and not covered by another level
+        scale = pyramid_scale(self._base, level)
+        for key in self._pyramid_keys(level, view):
+            if key in self._tiles:
+                continue
+            _, _, tx, ty = key
+            rect = (tx * TILE / scale, ty * TILE / scale, (tx + 1) * TILE / scale, (ty + 1) * TILE / scale)
+            if any(all(k in self._tiles for k in self._pyramid_keys(lv, rect)) for lv in fallbacks):
+                continue
+            x0 = self._origin[0] + rect[0] * self._scale
+            y0 = self._origin[1] + rect[1] * self._scale
+            gc.PushState()
+            gc.Clip(x0, y0, (rect[2] - rect[0]) * self._scale, (rect[3] - rect[1]) * self._scale)
+            gc.SetBrush(wx.WHITE_BRUSH)
+            gc.SetPen(wx.TRANSPARENT_PEN)
+            gc.DrawRectangle(x0, y0, (rect[2] - rect[0]) * self._scale, (rect[3] - rect[1]) * self._scale)
+            gc.Translate(self._origin[0], self._origin[1])
+            gc.Scale(self._scale, self._scale)
+            self._scene.draw(gc, rect, self._scale)
+            gc.PopState()
+
+    def _draw_tiled(self, dc: wx.DC, width: int, height: int) -> None:
+        exact = exact_tiles(self._origin, self._scale, width, height, self._svg.width, self._svg.height)
+        if not self._anim.IsRunning():
+            # at rest and while moving: exact tiles only - render what is missing
+            (ix, iy), _ = exact_grid(self._origin)
+            for tx, ty in exact:
+                key = self._exact_key(tx, ty)
+                self._render_key(key)
+                dc.DrawBitmap(self._tiles.get(key), ix + tx * TILE, iy + ty * TILE)
+            return
+        gc = wx.GraphicsContext.Create(dc)
+        if gc is not None:
+            gc.SetAntialiasMode(wx.ANTIALIAS_DEFAULT)
+            gc.SetInterpolationQuality(wx.INTERPOLATION_GOOD)
+            budget_end = time.perf_counter() + self.PAINT_BUDGET_MS / 1000.0
+            self._draw_pyramid(gc, vector.view_rect(self._origin, self._scale, width, height), budget_end)
+            del gc
+
+    def _wanted(self) -> List[Tuple]:
+        """Tiles worth rendering ahead, most useful first."""
+        width, height = self.canvas.GetClientSize()
+        svg = self._svg
+        keys: List[Tuple] = []
+        if not self._anim.IsRunning():
+            keys += [self._exact_key(tx, ty)
+                     for tx, ty in exact_tiles(self._origin, self._scale, width, height, svg.width, svg.height)]
+        view = vector.view_rect(self._origin, self._scale, width, height)
+        level = pyramid_level(self._scale, self._base)
+        keys += self._pyramid_keys(level, view)
+        if not self._anim.IsRunning():
+            # ready to move: a ring of exact tiles around the window
+            keys += [self._exact_key(tx, ty)
+                     for tx, ty in exact_tiles(self._origin, self._scale, width, height, svg.width, svg.height, 1)]
+            # ready to zoom: the next levels in, over the window, and out, over a larger area
+            cx, cy = (view[0] + view[2]) / 2.0, (view[1] + view[3]) / 2.0
+            for step in (1, -1, 2, -2):
+                lv = level + step
+                if pyramid_scale(self._base, lv) < self._fit_scale * MIN_ZOOM / 1.5 or \
+                        pyramid_scale(self._base, lv) > self._fit_scale * MAX_ZOOM * 1.5:
+                    continue
+                grow = max(1.0, self._scale / pyramid_scale(self._base, lv))
+                hw, hh = (view[2] - view[0]) * grow / 2.0, (view[3] - view[1]) * grow / 2.0
+                keys += self._pyramid_keys(lv, (cx - hw, cy - hh, cx + hw, cy + hh))
+        return keys
+
+    def on_idle(self, event: wx.IdleEvent) -> None:
+        if not self._heavy or self._scene is None or not self._has_image():
+            return
+        end = time.perf_counter() + self.IDLE_BUDGET_MS / 1000.0
+        rendered = False
+        for key in self._wanted():
+            if key in self._tiles:
+                continue
+            if time.perf_counter() >= end:
+                event.RequestMore()
+                break
+            self._render_key(key)
+            rendered = True
+        if rendered:
+            self._redraw()
 
     def on_open(self, event: wx.Event) -> None:
         if self._path and os.path.isfile(self._path):

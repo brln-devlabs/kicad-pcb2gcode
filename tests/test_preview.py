@@ -109,3 +109,34 @@ def test_ease_fraction_is_frame_rate_independent():
     one = ease_scale(1.0, 8.0, ease_fraction(0.032))[0]
     two = ease_scale(ease_scale(1.0, 8.0, ease_fraction(0.016))[0], 8.0, ease_fraction(0.016))[0]
     assert abs(one - two) < 1e-9
+
+
+def test_pyramid_levels_never_enlarge():
+    from kicad_pcb2gcode.preview import pyramid_level, pyramid_scale
+
+    base = 2.5
+    for scale in (1.0, 2.5, 2.6, 3.5, 3.6, 10, 149.9):
+        level = pyramid_level(scale, base)
+        assert pyramid_scale(base, level) >= scale * (1 - 1e-9)
+        assert pyramid_scale(base, level) < scale * 2 ** 0.5 * (1 + 1e-9)
+    assert pyramid_level(base, base) == 0
+    assert pyramid_level(base * 2, base) == 2
+
+
+def test_tiles_cover_the_view():
+    from kicad_pcb2gcode.preview import TILE, exact_grid, exact_tiles, pyramid_tiles
+
+    # image 100 x 50 units at 4 px/unit = 400 x 200 px, window 300 x 300 px
+    tiles = pyramid_tiles((0, 0, 75, 75), 4.0, 100, 50)
+    assert sorted(tiles) == [(0, 0), (1, 0)]
+    # exact tiles: grid follows the integer part of the origin
+    (ix, iy), (fx, fy) = exact_grid((-10.25, 20.5))
+    assert (ix, iy) == (-11, 20) and (fx, fy) == (0.75, 0.5)
+    tiles = exact_tiles((-10.25, 20.5), 4.0, 300, 300, 100, 50)
+    # screen x 0..300 -> grid x 11..311 -> tiles 0, 1; image covers grid y 0.5..200.5 -> tile 0
+    assert sorted(tiles) == [(0, 0), (1, 0)]
+    assert tiles[0] == (0, 0)  # nearest to the centre first
+    more = exact_tiles((-10.25, 20.5), 4.0, 300, 300, 100, 50, margin=1)
+    assert set(tiles) <= set(more) and len(more) == len(set(more))
+    assert all(t[0] >= 0 and t[1] >= 0 for t in more)  # never outside the image
+    assert TILE == 256

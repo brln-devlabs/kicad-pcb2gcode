@@ -586,7 +586,7 @@ def test_add_start_move_details(tmp_path):
     path = tmp_path / "a.ngc"
     path.write_text("( header )\r\nG21\r\nG90 (abs)\r\nG00 Z10\r\n", newline="")
     assert add_start_move(str(path), -2.5)
-    text = path.read_text(newline="")
+    text = path.read_bytes().decode()
     assert text.startswith("( header )\r\nG21\r\nG90 (abs)\r\nG53 G0 Z-2.5 (kicad-pcb2gcode start: up in machine coordinates)\r\n")
     assert "\r\nG0 X0 Y0 (to the origin)\r\nG00 Z10\r\n" in text
     assert not add_start_move(str(path), -2.5)  # only once

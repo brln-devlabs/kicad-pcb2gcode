@@ -210,10 +210,11 @@ def render(lang: str) -> None:
     frame.general.sides = "both"
     box = Box(100.0, -80.0, 140.0, -50.0)
     files = ["sensor-board_front.ngc", "sensor-board_drill.ngc", "sensor-board_back.ngc",
-             "sensor-board_mask_back.ngc", "sensor-board_mask_front.ngc"]
+             "sensor-board_mask_back.ngc", "sensor-board_mask_front.ngc", "sensor-board_outline.ngc"]
     log = [tr("Board outline: {:.3f} x {:.3f} mm", "Platinenkontur: {:.3f} x {:.3f} mm").format(box.width, box.height),
-           tr("Flip frame: the outline is not cut.", "Wenderahmen: Die Kontur wird nicht gefräst."), ""]
-    log += frame_steps(files, Inputs(board_box=box), "leftright")
+           tr("Flip frame: the outline is cut last, with the top side up.",
+              "Wenderahmen: Die Kontur wird zum Schluss gefräst, mit der Oberseite oben."), ""]
+    log += frame_steps(files, Inputs(board_box=box, cut_side="front"), "leftright")
     shots.append(("double-sided", titles.index("Double-sided"), frame, log))
 
     os.makedirs(OUT, exist_ok=True)

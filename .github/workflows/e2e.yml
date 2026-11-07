@@ -42,6 +42,10 @@ jobs:
         run: |
           set -x
           python3 ../tests/e2e/make_dense.py
+          # flip frame: outline cut last
+          python3 -m kicad_pcb2gcode ../tests/e2e/rect.kicad_pcb --frame --sides both --lang en || true
+          mkdir -p ../out/frame && cp -r ../tests/e2e/gcode/. ../out/frame/ && rm -rf ../tests/e2e/gcode
+          rm -f ../tests/e2e/rect.pcb2gcode.json
           for board in rounded rect dense; do
             python3 -m kicad_pcb2gcode "../tests/e2e/$board.kicad_pcb" --lang en || true
             ls -l "../tests/e2e/gcode" || true
@@ -76,5 +80,9 @@ jobs:
               for want in ("back", "drill", "outline", "mask_front", "mask_back"):
                   if f"{board}_{want}.ngc" not in files:
                       print(f"  MISSING {board}_{want}.ngc"); ok = False
+          frame = sorted(os.path.basename(p) for p in glob.glob("out/frame/*.ngc"))
+          print("frame", frame)
+          if "rect_outline.ngc" not in frame or "cut-side=front" not in open("out/frame/millproject").read():
+              print("  flip frame: outline missing or cut from the wrong side"); ok = False
           sys.exit(0 if ok else 1)
           PY

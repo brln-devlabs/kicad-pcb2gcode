@@ -32,6 +32,9 @@ class Inputs:
     board_box: Optional[Box] = None
     # Mill inside the shapes instead of around them (solder mask openings).
     invert: bool = False
+    # Side the outline is cut from when the job decides it (flip frame: the
+    # side facing up after the last other step); None follows the settings.
+    cut_side: Optional[str] = None
 
     @property
     def mills(self) -> bool:
@@ -249,8 +252,9 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
         add("cut-feed", o.cut_feed)
         add("cut-vertfeed", o.cut_vertfeed)
         add("cut-speed", o.cut_speed)
-        if o.cut_side != "auto":
-            add("cut-side", o.cut_side)
+        cut_side = inputs.cut_side or (o.cut_side if o.cut_side != "auto" else None)
+        if cut_side:
+            add("cut-side", cut_side)
         add("bridgesnum", o.bridgesnum)
         if o.bridgesnum > 0:
             add("bridges", o.bridges)

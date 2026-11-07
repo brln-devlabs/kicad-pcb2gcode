@@ -52,8 +52,8 @@ class GeneralSettings:
     # left/right (around the vertical axis) or top/bottom.
     flip_axis: str = "leftright"
     # Flip frame: a pocket of exactly the outline size is fixed on the machine
-    # and the pre-cut blank is turned over inside it. The outline is not cut,
-    # holes are drilled from the top before turning.
+    # and the pre-cut blank is turned over inside it. Holes are drilled from
+    # the top before turning, the outline is cut last.
     frame_mode: bool = False
     zsafe: float = 5.0
     zchange: float = 10.0

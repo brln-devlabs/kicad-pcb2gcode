@@ -169,8 +169,9 @@ befestigen und X0/Y0 auf seine linke untere Ecke setzen. Den Rohling auf
 dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen** (Reiter
 **Doppelseitig**)
 
-* wird die Kontur nicht gefräst (der Rohling hat schon seine Endgröße),
 * werden alle Löcher von oben gebohrt, vor dem Wenden,
+* wird die Kontur zum Schluss gefräst, von der Seite, die dann oben liegt
+  (kein zusätzliches Wenden; abschaltbar mit **Kontur ausfräsen**),
 * steht der Ablauf im Protokoll und in `gcode/ABLAUF.txt`:
 
 ```
@@ -182,12 +183,16 @@ dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen** (Reiter
 6. board_mask_back.ngc
 7. Platine wenden – Nullpunkt bleibt
 8. board_mask_front.ngc
+9. board_outline.ngc  Kontur ausfräsen, Oberseite oben
 ```
 
 <img src="docs/images/dialog-double-sided-de.png" width="60%" alt="Reiter Doppelseitig mit dem Ablauf im Protokoll">
 
 Bei nicht rechteckigen Platinen hat der Rahmen die Größe des umschließenden
-Rechtecks der Kontur. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
+Rechtecks der Kontur. Der Konturfräser läuft außen an der Konturlinie entlang,
+also direkt an der Rahmenkante: Bei einem Rahmen genau in Platinengröße fräst
+er um einen Fräserdurchmesser in den Rahmenrand – den Rahmen deshalb aus
+Opfermaterial machen oder die Haltestege nutzen. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
 `tests/test_placement.py` nachbildet; trotzdem zuerst an einem Reststück
 prüfen.
 

@@ -245,9 +245,10 @@ def test_flip_frame(board):
     result = run_job(request(board, s), log.append)
     names = sorted(os.path.basename(f) for f in result.files)
     assert names == ["my_board_back.ngc", "my_board_drill.ngc", "my_board_front.ngc",
-                     "my_board_mask_back.ngc", "my_board_mask_front.ngc"]  # no outline
+                     "my_board_mask_back.ngc", "my_board_mask_front.ngc", "my_board_outline.ngc"]
     millproject = open(result.millproject_path).read()
-    assert "outline=" not in millproject
+    assert "outline=cam/outline.gbr" in millproject
+    assert "cut-side=front" in millproject  # the top is up after the last mask step
     assert "drill-side=front" in millproject
     assert "x-offset=0" in millproject and "mirror-axis=5" in millproject  # fake outline 10 x 10 mm
     steps = open(os.path.join(result.output_dir, "STEPS.txt")).read().splitlines()
@@ -260,7 +261,44 @@ def test_flip_frame(board):
     assert order[5].startswith("my_board_mask_back.ngc")
     assert order[6].startswith("Turn the board over left/right")
     assert order[7].startswith("my_board_mask_front.ngc")
+    assert order[8] == "my_board_outline.ngc  (cut the outline, top side up)"
+    assert len(order) == 9
     assert any("Board outline: 10.000 x 10.000 mm" in line for line in log)
+    assert any("outline is cut last, with the top side up" in line for line in log)
+
+
+def test_flip_frame_outline_side_follows_the_last_step(board):
+    from kicad_pcb2gcode.job import frame_final_side
+    from kicad_pcb2gcode.millproject import Inputs
+
+    both = Inputs(front="f", back="b")
+    assert frame_final_side(both, None) == "back"
+    assert frame_final_side(Inputs(front="f"), None) == "front"
+    assert frame_final_side(Inputs(back="b"), None) == "back"
+    assert frame_final_side(both, Inputs(front="mf", back="mb")) == "front"
+    assert frame_final_side(both, Inputs(front="mf")) == "front"
+    assert frame_final_side(both, Inputs(back="mb")) == "back"
+    assert frame_final_side(Inputs(front="f"), Inputs(front="mf", back="mb")) == "back"
+
+    s = Settings()
+    s.general.frame_mode = True
+    s.general.sides = "both"
+    s.mask.enabled = False
+    result = run_job(request(board, s), lambda line: None)
+    assert "cut-side=back" in open(result.millproject_path).read()
+    steps = open(os.path.join(result.output_dir, "STEPS.txt")).read().splitlines()
+    assert steps[-2].strip().startswith("4. my_board_back.ngc")
+    assert steps[-1].strip() == "5. my_board_outline.ngc  (cut the outline, bottom side up)"
+
+
+def test_flip_frame_without_outline_cut(board):
+    s = Settings()
+    s.general.frame_mode = True
+    s.general.export_outline = False
+    result = run_job(request(board, s), lambda line: None)
+    millproject = open(result.millproject_path).read()
+    assert "outline=" not in millproject and "x-offset=" in millproject
+    assert not any(f.endswith("_outline.ngc") for f in result.files)
 
 
 def test_outline_defines_origin_even_when_not_cut(board):

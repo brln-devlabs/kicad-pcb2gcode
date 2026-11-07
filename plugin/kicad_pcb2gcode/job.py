@@ -276,9 +276,7 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Dict[str, O
         box = inputs.board_box
         if box is not None:
             log(tr("Board outline: {:.3f} x {:.3f} mm", "Platinenkontur: {:.3f} x {:.3f} mm").format(box.width, box.height))
-        if g.frame_mode:
-            log(tr("Flip frame: the outline is not cut.", "Wenderahmen: Die Kontur wird nicht gefräst."))
-        elif g.export_outline:
+        if g.export_outline:
             if box is not None and gerber.layer_stats(target).draws:
                 inputs.outline = _rel(target, out)
             else:
@@ -331,7 +329,34 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Dict[str, O
         if not mask_inputs.mills:
             mask_inputs = None
 
+    if g.frame_mode and inputs.outline:
+        inputs.cut_side = frame_final_side(inputs, mask_inputs)
+        log(tr("Flip frame: the outline is cut last, with the {} up.",
+               "Wenderahmen: Die Kontur wird zum Schluss gefräst, mit der {} oben.").format(_side_name(inputs.cut_side)))
+
     return inputs, chosen, {"npth": npth_inputs, "mask": mask_inputs}
+
+
+def _side_name(side: str) -> str:
+    return tr("top side", "Oberseite") if side == "front" else tr("bottom side", "Unterseite")
+
+
+def _mask_order(inputs: Inputs, mask_inputs: Optional[Inputs]) -> List[str]:
+    """Mask sides in flip-frame order: the board comes back into the frame
+    the way it left the machine, so after milling the bottom it starts there."""
+    if mask_inputs is None:
+        return []
+    order = ["back", "front"] if inputs.back else ["front", "back"]
+    return [side for side in order if getattr(mask_inputs, side)]
+
+
+def frame_final_side(inputs: Inputs, mask_inputs: Optional[Inputs]) -> str:
+    """Side facing up in the flip frame after copper, holes and solder mask -
+    the outline is cut from there, so the board is not turned once more."""
+    masks = _mask_order(inputs, mask_inputs)
+    if masks:
+        return masks[-1]
+    return "back" if inputs.back else "front"
 
 
 def _job_name(path: str) -> str:
@@ -378,17 +403,20 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
         n += 1
         lines.append("  {}. {}  ({})".format(n, by_job["back"], tr("bottom side", "Unterseite")))
         n += 1
+    up = "back" if "back" in by_job else "front"
     if "mask_front" in by_job or "mask_back" in by_job:
         bottom_up = "back" in by_job
-        lines.append("  {}. {}".format(n, tr(
-            "Apply and cure the solder mask, put the board back into the frame ({} up).",
-            "Lötstopplack auftragen und aushärten, Platine wieder in den Rahmen ({} oben).").format(
-                tr("bottom", "Unterseite") if bottom_up else tr("top", "Oberseite"))))
-        n += 1
         order = ["mask_back", "mask_front"] if bottom_up else ["mask_front", "mask_back"]
         labels = {"mask_front": tr("solder mask top", "Lötstopp Oberseite"),
                   "mask_back": tr("solder mask bottom", "Lötstopp Unterseite")}
         present = [job for job in order if job in by_job]
+        first_up = present[0].split("_", 1)[1]
+        lines.append("  {}. {}".format(n, tr(
+            "Apply and cure the solder mask, put the board back into the frame ({} up).",
+            "Lötstopplack auftragen und aushärten, Platine wieder in den Rahmen ({} oben).").format(
+                tr("bottom", "Unterseite") if first_up == "back" else tr("top", "Oberseite"))))
+        n += 1
+        up = present[-1].split("_", 1)[1]
         for i, job in enumerate(present):
             if i == 1:
                 lines.append("  {}. {}".format(n, tr("Turn the board over {} - keep the origin.",
@@ -396,6 +424,15 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
                 n += 1
             lines.append("  {}. {}  ({})".format(n, by_job[job], labels[job]))
             n += 1
+    if "outline" in by_job:
+        side = inputs.cut_side or up
+        if side != up:  # only when the files were made differently
+            lines.append("  {}. {}".format(n, tr("Turn the board over {} - keep the origin.",
+                                                "Platine {} wenden - Nullpunkt bleibt.").format(flip)))
+            n += 1
+        lines.append("  {}. {}  ({})".format(n, by_job["outline"], tr(
+            "cut the outline, {} up", "Kontur ausfräsen, {} oben").format(_side_name(side))))
+        n += 1
     return lines
 
 

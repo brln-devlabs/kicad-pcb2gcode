@@ -159,8 +159,9 @@ pocket) with exactly the size of the board outline on the machine and set
 X0/Y0 to its lower-left corner. Cut the blank to the same size. With
 **Mill in a flip frame** (tab **Double-sided**) the plugin
 
-* does not cut the outline (the blank already has its final size),
 * drills all holes from the top, before turning over,
+* cuts the outline last, from the side facing up by then (no extra turn;
+  untick **Cut board outline** to skip it),
 * writes the order of work to the log and to `gcode/STEPS.txt`
   (`ABLAUF.txt` in German):
 
@@ -173,12 +174,16 @@ X0/Y0 to its lower-left corner. Cut the blank to the same size. With
 6. board_mask_back.ngc
 7. turn the board over – keep the origin
 8. board_mask_front.ngc
+9. board_outline.ngc  cut the outline, top side up
 ```
 
 <img src="docs/images/dialog-double-sided-en.png" width="60%" alt="Double-sided tab with the order of work in the log">
 
 For non-rectangular boards the frame has the size of the outline's bounding
-rectangle. The alignment follows pcb2gcode's coordinate formulas, which
+rectangle. The outline cutter runs just outside the outline line, that is
+right along the frame edge: in a frame of exactly the board size it cuts one
+cutter diameter into the frame wall, so make the frame from sacrificial
+material or rely on the holding tabs. The alignment follows pcb2gcode's coordinate formulas, which
 `tests/test_placement.py` reproduces; still verify on a scrap piece first.
 
 ### Solder mask

@@ -570,9 +570,10 @@ class Pcb2GcodeDialog(wx.Dialog):
             event.Skip()
         voronoi = self.controls[("isolation", "voronoi")][1].GetValue()
         self.controls[("isolation", "preserve_thermal_reliefs")][1].Enable(bool(voronoi))
-        # The flip frame fixes these: corner at X0/Y0, no outline cut, drilling from the top.
+        # The flip frame fixes these: corner at X0/Y0, drilling from the top,
+        # outline cut last from the side that is up by then.
         frame = bool(self.controls[("general", "frame_mode")][1].GetValue())
-        for key in (("general", "zero_start"), ("general", "export_outline"), ("drill", "drill_side")):
+        for key in (("general", "zero_start"), ("drill", "drill_side"), ("outline", "cut_side")):
             self.controls[key][1].Enable(not frame)
         mask = bool(self.controls[("mask", "enabled")][1].GetValue())
         for (section, name), (_, ctrl) in self.controls.items():

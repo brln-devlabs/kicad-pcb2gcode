@@ -30,6 +30,8 @@ class Inputs:
     # exactly instead of relying on pcb2gcode's zero-start, which adds a
     # margin of one cutter diameter and mirrors the bottom into negative X.
     board_box: Optional[Box] = None
+    # Mill inside the shapes instead of around them (solder mask openings).
+    invert: bool = False
 
     @property
     def mills(self) -> bool:
@@ -38,6 +40,26 @@ class Inputs:
     @property
     def empty(self) -> bool:
         return not (self.front or self.back or self.drill or self.outline)
+
+
+def mask_settings(settings: Settings) -> Settings:
+    """Settings for the solder-mask run: the isolation section is replaced by
+    the mask tool, depth and feeds; everything else stays the same, so origin,
+    flip axis and G-code dialect match the copper run exactly."""
+    s = settings.copy()
+    m = settings.mask
+    iso = s.isolation
+    iso.mill_diameters = m.mill_diameters
+    iso.offset = m.offset
+    iso.zwork = m.zwork
+    iso.mill_feed = m.mill_feed
+    iso.mill_vertfeed = m.mill_vertfeed
+    iso.mill_speed = m.mill_speed
+    iso.isolation_width = m.isolation_width
+    iso.milling_overlap = m.milling_overlap
+    iso.voronoi = False
+    iso.mill_feed_direction = "any"
+    return s
 
 
 def mill_diameters(settings: Settings) -> List[float]:
@@ -188,6 +210,8 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
             add("isolation-width", iso.isolation_width)
         if iso.isolation_width > 0 or len(sizes) > 1:
             add("milling-overlap", parse_overlap(iso.milling_overlap))
+        if inputs.invert:
+            add("invert-gerbers", True)
         if iso.voronoi:
             add("voronoi", True)
             if not iso.preserve_thermal_reliefs:

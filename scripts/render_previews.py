@@ -103,6 +103,9 @@ def disabled_keys(settings: Settings) -> set:
         keys.add(("isolation", "preserve_thermal_reliefs"))
     if settings.general.frame_mode:
         keys |= {("general", "zero_start"), ("general", "export_outline"), ("drill", "drill_side")}
+    if not settings.mask.enabled:
+        keys |= {("mask", f.name) for _, rows in PAGES for f in rows
+                 if isinstance(f, Field) and f.section == "mask" and f.name != "enabled"}
     return keys
 
 
@@ -184,11 +187,14 @@ def render(lang: str) -> None:
     iso = Settings()
     shots.append(("isolation", titles.index("Isolation"), iso, ready))
 
+    shots.append(("solder-mask", titles.index("Solder mask"), Settings(), ready))
+
     frame = Settings()
     frame.general.frame_mode = True
     frame.general.sides = "both"
     box = Box(100.0, -80.0, 140.0, -50.0)
-    files = ["sensor-board_front.ngc", "sensor-board_drill.ngc", "sensor-board_back.ngc"]
+    files = ["sensor-board_front.ngc", "sensor-board_drill.ngc", "sensor-board_back.ngc",
+             "sensor-board_mask_back.ngc", "sensor-board_mask_front.ngc"]
     log = [tr("Board outline: {:.3f} x {:.3f} mm", "Platinenkontur: {:.3f} x {:.3f} mm").format(box.width, box.height),
            tr("Flip frame: the outline is not cut.", "Wenderahmen: Die Kontur wird nicht gefräst."), ""]
     log += frame_steps(files, Inputs(board_box=box), "leftright")

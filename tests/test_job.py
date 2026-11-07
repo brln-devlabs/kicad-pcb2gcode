@@ -47,7 +47,8 @@ def test_auto_sides_mill_the_side_with_traces(board):
     assert result.inputs.back == "cam/back.gbr"
     assert result.inputs.front is None
     names = sorted(os.path.basename(f) for f in result.files)
-    assert names == ["my_board_back.ngc", "my_board_drill.ngc", "my_board_outline.ngc"]
+    assert names == ["my_board_back.ngc", "my_board_drill.ngc", "my_board_mask_back.ngc",
+                     "my_board_mask_front.ngc", "my_board_outline.ngc"]
     millproject = open(result.millproject_path).read()
     assert "back=cam/back.gbr" in millproject
     assert "drill=cam/drill.drl" in millproject
@@ -66,7 +67,8 @@ def test_skip_drill_and_outline(board):
     s.general.export_drill = False
     s.general.export_outline = False
     result = run_job(request(board, s), lambda line: None)
-    assert [os.path.basename(f) for f in result.files] == ["my_board_back.ngc"]
+    assert [os.path.basename(f) for f in result.files] == [
+        "my_board_back.ngc", "my_board_mask_back.ngc", "my_board_mask_front.ngc"]
 
 
 def test_stale_gcode_is_removed(board):
@@ -232,7 +234,8 @@ def test_flip_frame(board):
     log = []
     result = run_job(request(board, s), log.append)
     names = sorted(os.path.basename(f) for f in result.files)
-    assert names == ["my_board_back.ngc", "my_board_drill.ngc", "my_board_front.ngc"]  # no outline
+    assert names == ["my_board_back.ngc", "my_board_drill.ngc", "my_board_front.ngc",
+                     "my_board_mask_back.ngc", "my_board_mask_front.ngc"]  # no outline
     millproject = open(result.millproject_path).read()
     assert "outline=" not in millproject
     assert "drill-side=front" in millproject
@@ -243,6 +246,10 @@ def test_flip_frame(board):
     assert order[1].startswith("my_board_drill.ngc")
     assert order[2].startswith("Turn the board over left/right")
     assert order[3].startswith("my_board_back.ngc")
+    assert order[4].startswith("Apply and cure the solder mask") and "(bottom up)" in order[4]
+    assert order[5].startswith("my_board_mask_back.ngc")
+    assert order[6].startswith("Turn the board over left/right")
+    assert order[7].startswith("my_board_mask_front.ngc")
     assert any("Board outline: 10.000 x 10.000 mm" in line for line in log)
 
 
@@ -252,3 +259,53 @@ def test_outline_defines_origin_even_when_not_cut(board):
     result = run_job(request(board, s), lambda line: None)
     millproject = open(result.millproject_path).read()
     assert "x-offset=" in millproject and "outline=" not in millproject
+
+
+def read_options(path):
+    opts = {}
+    for line in open(path):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            key, value = line.split("=", 1)
+            opts[key] = value
+    return opts
+
+
+def test_solder_mask_run(board):
+    result = run_job(request(board), lambda line: None)
+    copper = read_options(result.millproject_path)
+    mask = read_options(os.path.join(result.output_dir, "millproject_mask"))
+    assert mask["invert-gerbers"] == "true"
+    assert mask["front"] == "cam/mask_front.gbr" and mask["back"] == "cam/mask_back.gbr"
+    assert mask["basename"] == "my_board_mask"
+    assert mask["zwork"] == "-0.03" and mask["mill-diameters"] == "0.1"
+    assert "offset" not in mask and "voronoi" not in mask
+    for key in ("drill", "outline", "zdrill", "zcut"):
+        assert key not in mask
+    for key in ("x-offset", "y-offset", "mirror-axis", "zsafe", "nog64", "nom6"):  # same placement and dialect
+        assert mask[key] == copper[key], key
+    assert "invert-gerbers" not in copper
+
+
+def test_solder_mask_can_be_switched_off(board):
+    s = Settings()
+    s.mask.enabled = False
+    result = run_job(request(board, s), lambda line: None)
+    assert not any("mask" in os.path.basename(f) for f in result.files)
+    assert not os.path.exists(os.path.join(result.output_dir, "millproject_mask"))
+
+
+def test_mask_without_openings_is_skipped(board):
+    with open(board, "w") as fh:
+        fh.write("(kicad_pcb NO_MASK_OPENINGS)")
+    log = []
+    result = run_job(request(board), log.append)
+    assert result.mask_inputs is None
+    assert any("F.Mask has no openings" in line for line in log)
+
+
+def test_invalid_mask_settings_are_reported_as_such(board):
+    s = Settings()
+    s.mask.zwork = 0.1
+    with pytest.raises(JobError, match="Solder mask: Milling depth must be below zero"):
+        run_job(request(board, s), lambda line: None)

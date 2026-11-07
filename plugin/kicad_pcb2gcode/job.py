@@ -32,7 +32,7 @@ from .export import (
     split_drill_files,
 )
 from .i18n import problem_text, tr
-from .millproject import Inputs, mill_diameters, render, validate
+from .millproject import Inputs, mask_settings, mill_diameters, render, validate
 from .settings import Settings
 
 Log = Callable[[str], None]
@@ -60,6 +60,7 @@ class JobResult:
     inputs: Inputs
     files: List[str] = field(default_factory=list)
     millproject_path: str = ""
+    mask_inputs: Optional[Inputs] = None
 
 
 def _popen_kwargs() -> dict:
@@ -199,9 +200,10 @@ def _rel(path: str, start: str) -> str:
     return os.path.relpath(path, start).replace(os.sep, "/")
 
 
-def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str]":
+def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str, Optional[Inputs]]":
     """Export everything pcb2gcode needs into ``<output>/cam``; return the
-    inputs (paths relative to the output folder) and the chosen sides."""
+    inputs (paths relative to the output folder), the chosen copper sides and
+    the inputs of the solder-mask run (None if there is none)."""
     s = req.settings
     out = req.output_dir
     cam_dir = os.path.join(out, CAM_SUBDIR)
@@ -272,15 +274,40 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str]":
         else:
             log(tr("No holes - skipping drilling.", "Keine Bohrungen - Bohren wird übersprungen."))
 
-    return inputs, chosen
+    mask_inputs = None
+    if s.mask.enabled:
+        mask_inputs = Inputs(board_box=inputs.board_box, invert=True)
+        for side, layer in (("front", "F.Mask"), ("back", "B.Mask")):
+            target = os.path.join(cam_dir, "mask_{}.gbr".format(side))
+            log(tr("Exporting {} ...", "Exportiere {} ...").format(layer))
+            export_layer(req, layer, target, log)
+            if gerber.layer_stats(target).empty:
+                log(tr("{} has no openings - skipped.", "{} hat keine Öffnungen - übersprungen.").format(layer))
+            else:
+                setattr(mask_inputs, side, _rel(target, out))
+        if not mask_inputs.mills:
+            mask_inputs = None
+
+    return inputs, chosen, mask_inputs
+
+
+def _job_name(path: str) -> str:
+    """"front", "drill", "mask_back" … from a pcb2gcode output file name."""
+    stem = os.path.basename(path)[:-4]
+    for job in ("mask_front", "mask_back"):
+        if stem.endswith("_" + job):
+            return job
+    return stem.rsplit("_", 1)[-1]
 
 
 def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
-    """Operator instructions for the flip frame, in machining order."""
-    by_job = {}
-    for path in files:
-        stem = os.path.basename(path)[:-4]
-        by_job[stem.rsplit("_", 1)[-1]] = os.path.basename(path)
+    """Operator instructions for the flip frame, in machining order.
+
+    Copper and holes first. The solder mask is applied afterwards; the board
+    goes back into the frame with the bottom up (as it came off the machine),
+    the bottom openings are milled, the board is turned and the top openings
+    follow."""
+    by_job = {_job_name(path): os.path.basename(path) for path in files}
     box = inputs.board_box
     size = "{:.2f} x {:.2f} mm".format(box.width, box.height) if box else "?"
     flip = (tr("left/right (about the vertical centre line)", "links/rechts (um die senkrechte Mittelachse)")
@@ -303,6 +330,25 @@ def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
                                             "Platine {} wenden - Nullpunkt bleibt.").format(flip)))
         n += 1
         lines.append("  {}. {}  ({})".format(n, by_job["back"], tr("bottom side", "Unterseite")))
+        n += 1
+    if "mask_front" in by_job or "mask_back" in by_job:
+        bottom_up = "back" in by_job
+        lines.append("  {}. {}".format(n, tr(
+            "Apply and cure the solder mask, put the board back into the frame ({} up).",
+            "Lötstopplack auftragen und aushärten, Platine wieder in den Rahmen ({} oben).").format(
+                tr("bottom", "Unterseite") if bottom_up else tr("top", "Oberseite"))))
+        n += 1
+        order = ["mask_back", "mask_front"] if bottom_up else ["mask_front", "mask_back"]
+        labels = {"mask_front": tr("solder mask top", "Lötstopp Oberseite"),
+                  "mask_back": tr("solder mask bottom", "Lötstopp Unterseite")}
+        present = [job for job in order if job in by_job]
+        for i, job in enumerate(present):
+            if i == 1:
+                lines.append("  {}. {}".format(n, tr("Turn the board over {} - keep the origin.",
+                                                    "Platine {} wenden - Nullpunkt bleibt.").format(flip)))
+                n += 1
+            lines.append("  {}. {}  ({})".format(n, by_job[job], labels[job]))
+            n += 1
     return lines
 
 
@@ -317,6 +363,16 @@ def clean_outputs(output_dir: str) -> None:
             os.remove(path)
         except OSError:
             pass
+
+
+MASK_PROJECT = "millproject_mask"
+
+
+def _run_pcb2gcode(req: JobRequest, cmd: List[str], log: Log) -> None:
+    code = _run(cmd, log, cwd=req.output_dir)
+    if code != 0:
+        raise JobError(tr("pcb2gcode failed (exit code {}). See the log above.",
+                          "pcb2gcode ist fehlgeschlagen (Exit-Code {}). Details im Protokoll oben.").format(code))
 
 
 def basename_for(req: JobRequest) -> str:
@@ -338,11 +394,17 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
         raise JobError(tr("Board file not found: {}", "Board-Datei nicht gefunden: {}").format(req.board_file))
 
     os.makedirs(req.output_dir, exist_ok=True)
-    inputs, sides = prepare_inputs(req, log)
+    inputs, sides, mask_inputs = prepare_inputs(req, log)
 
     problems = validate(req.settings, inputs)
-    if problems:
-        raise JobError("\n".join(problem_text(p) for p in problems))
+    if mask_inputs is not None:
+        mask_problems = validate(mask_settings(req.settings), mask_inputs)
+    else:
+        mask_problems = []
+    if problems or mask_problems:
+        lines = [problem_text(p) for p in problems]
+        lines += [tr("Solder mask: ", "Lötstopp: ") + problem_text(p) for p in mask_problems]
+        raise JobError("\n".join(lines))
 
     if inputs.mills:
         log(tr("Mill diameters: {} mm", "Fräserdurchmesser: {} mm").format(
@@ -353,12 +415,19 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
     with open(millproject_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(render(req.settings, inputs, basename))
 
+    mask_project = os.path.join(req.output_dir, MASK_PROJECT)
+    if mask_inputs is not None:
+        with open(mask_project, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(render(mask_settings(req.settings), mask_inputs, basename + "_mask"))
+    elif os.path.isfile(mask_project):
+        os.remove(mask_project)
+
     clean_outputs(req.output_dir)
     log(tr("Running pcb2gcode ...", "Starte pcb2gcode ..."))
-    code = _run([req.pcb2gcode], log, cwd=req.output_dir)
-    if code != 0:
-        raise JobError(tr("pcb2gcode failed (exit code {}). See the log above.",
-                          "pcb2gcode ist fehlgeschlagen (Exit-Code {}). Details im Protokoll oben.").format(code))
+    _run_pcb2gcode(req, [req.pcb2gcode], log)
+    if mask_inputs is not None:
+        log(tr("Running pcb2gcode for the solder mask ...", "Starte pcb2gcode für den Lötstopp ..."))
+        _run_pcb2gcode(req, [req.pcb2gcode, "--config", MASK_PROJECT], log)
 
     files = sorted(glob.glob(os.path.join(req.output_dir, "*.ngc")))
     if not files:
@@ -376,4 +445,5 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
                 fh.write("\n".join(steps) + "\n")
         except OSError:
             pass
-    return JobResult(output_dir=req.output_dir, sides=sides, inputs=inputs, files=files, millproject_path=millproject_path)
+    return JobResult(output_dir=req.output_dir, sides=sides, inputs=inputs, files=files,
+                     millproject_path=millproject_path, mask_inputs=mask_inputs)

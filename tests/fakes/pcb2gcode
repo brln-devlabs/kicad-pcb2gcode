@@ -8,8 +8,11 @@ if os.environ.get("FAKE_PCB2GCODE_FAIL"):
     print("ERROR: simulated failure")
     sys.exit(3)
 
+config = "millproject"
+if "--config" in sys.argv:
+    config = sys.argv[sys.argv.index("--config") + 1]
 options = {}
-with open("millproject") as fh:
+with open(config) as fh:
     for line in fh:
         line = line.strip()
         if line and not line.startswith("#"):

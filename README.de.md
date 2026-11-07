@@ -70,6 +70,8 @@ Board öffnen, Toolbar-Button drücken, Einstellungen prüfen,
   Voronoi-Modus – dieselben Felder wie in pcb2gcodeGUI.
 * **Bohren** – Tiefe, Vorschub, verfügbare Bohrergrößen, große Löcher fräsen.
 * **Kontur** – Fräser, Zustellung pro Durchgang, Haltestege.
+* **Lötstopp** – fräst die Öffnungen von `F.Mask`/`B.Mask` frei (standardmäßig
+  an), siehe unten.
 * **Maschine** – G-Code-Dialekt und zusätzliche pcb2gcode-Optionen.
 
 Die Voreinstellungen stammen aus einer bewährten pcb2gcodeGUI-Einstellung
@@ -90,7 +92,10 @@ mein-board/
     mein-board_back.ngc       Isolationsfräsen Unterseite
     mein-board_drill.ngc      Bohren
     mein-board_outline.ngc    Kontur
+    mein-board_mask_back.ngc  Lötstopp-Öffnungen Unterseite
+    mein-board_mask_front.ngc Lötstopp-Öffnungen Oberseite
     millproject               die verwendete pcb2gcode-Konfiguration
+    millproject_mask          … und die des Lötstopp-Laufs
     cam/                      exportierte Gerber- und Bohrdateien
 ```
 
@@ -136,6 +141,10 @@ dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen** (Reiter
 2. board_drill.ngc   Bohren
 3. Platine im Rahmen links/rechts wenden – Nullpunkt bleibt
 4. board_back.ngc    Unterseite
+5. Lötstopplack auftragen und aushärten, Platine zurück in den Rahmen (Unterseite oben)
+6. board_mask_back.ngc
+7. Platine wenden – Nullpunkt bleibt
+8. board_mask_front.ngc
 ```
 
 <img src="docs/images/dialog-double-sided-de.png" width="60%" alt="Reiter Doppelseitig mit dem Ablauf im Protokoll">
@@ -144,6 +153,25 @@ Bei nicht rechteckigen Platinen hat der Rahmen die Größe des umschließenden
 Rechtecks der Kontur. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
 `tests/test_placement.py` nachbildet; trotzdem zuerst an einem Reststück
 prüfen.
+
+### Lötstopp
+
+Mit **Lötstopp-Öffnungen fräsen** (Voreinstellung) exportiert das Plugin auch
+`F.Mask` und `B.Mask` und startet pcb2gcode ein zweites Mal mit
+`invert-gerbers`: Statt um die Formen herum wird innerhalb der Formen gefräst –
+bei einer Lötstopp-Lage sind das genau die Öffnungen über den Pads. Der Ablauf:
+Kupfer und Bohrungen fräsen, UV-Lötstopplack auftragen und aushärten, Platine
+wieder einspannen und die `*_mask_*.ngc`-Dateien fräsen, um die Pads
+freizulegen.
+
+<img src="docs/images/dialog-solder-mask-de.png" width="60%" alt="Reiter Lötstopp">
+
+Der Lauf hat eigenes Werkzeug, eigene Tiefe und eigene Vorschübe (Reiter
+**Lötstopp**); Nullpunkt, Spiegelachse und G-Code-Dialekt sind dieselben wie
+beim Kupfer. Die Voreinstellungen (0,1-mm-Werkzeug, 0,03 mm tief, 2 mm vom Rand
+nach innen ausgeräumt) sind nur ein Startpunkt – die Tiefe muss durch den Lack,
+aber nicht durchs Kupfer gehen, also an einem Reststück ausprobieren. Im
+Wenderahmen enthält der Ablauf auch die Lötstopp-Schritte.
 
 ### Boards mit mehr als zwei Kupferlagen
 

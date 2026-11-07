@@ -68,6 +68,8 @@ Open a board, press the toolbar button, check the settings, press
   (percent or length), Voronoi mode – the same fields as in pcb2gcodeGUI.
 * **Drilling** – depth, feed, available drill sizes, milling large holes.
 * **Outline** – cutter, depth per pass, holding tabs.
+* **Solder mask** – mills the openings of `F.Mask`/`B.Mask` free (on by default),
+  see below.
 * **Machine** – G-code dialect switches and extra pcb2gcode options.
 
 The defaults come from a proven pcb2gcodeGUI setup on a GRBL machine with a
@@ -87,7 +89,10 @@ my-board/
     my-board_back.ngc       isolation milling, bottom side
     my-board_drill.ngc      drilling
     my-board_outline.ngc    board outline
+    my-board_mask_back.ngc  solder mask openings, bottom side
+    my-board_mask_front.ngc solder mask openings, top side
     millproject             the exact pcb2gcode configuration used
+    millproject_mask        … and the one of the solder-mask run
     cam/                    exported Gerber and drill files
 ```
 
@@ -130,6 +135,10 @@ X0/Y0 to its lower-left corner. Cut the blank to the same size. With
 2. board_drill.ngc   drill
 3. turn the board over left/right in the frame – keep the origin
 4. board_back.ngc    bottom side
+5. apply and cure the solder mask, board back into the frame (bottom up)
+6. board_mask_back.ngc
+7. turn the board over – keep the origin
+8. board_mask_front.ngc
 ```
 
 <img src="docs/images/dialog-double-sided-en.png" width="60%" alt="Double-sided tab with the order of work in the log">
@@ -137,6 +146,24 @@ X0/Y0 to its lower-left corner. Cut the blank to the same size. With
 For non-rectangular boards the frame has the size of the outline's bounding
 rectangle. The alignment follows pcb2gcode's coordinate formulas, which
 `tests/test_placement.py` reproduces; still verify on a scrap piece first.
+
+### Solder mask
+
+With **Mill solder mask openings** (default) the plugin also exports `F.Mask`
+and `B.Mask` and runs pcb2gcode a second time with `invert-gerbers`: instead
+of milling around the shapes it mills inside them – for a mask layer those are
+exactly the openings over the pads. The workflow: mill copper and holes, apply
+and cure a UV solder mask, put the board back on the machine and mill the
+`*_mask_*.ngc` files to free the pads.
+
+<img src="docs/images/dialog-solder-mask-en.png" width="60%" alt="Solder mask tab">
+
+The run has its own tool, depth and feeds (tab **Solder mask**); origin, flip
+axis and G-code dialect are the same as for the copper. The defaults (0.1 mm
+tool, 0.03 mm deep, cleared 2 mm inward from each edge) are only a starting
+point – the depth must go through the lacquer but not through the copper, so
+try it on a scrap piece. In the flip frame the order of work includes the
+mask steps.
 
 ### Boards with more than two copper layers
 

@@ -115,7 +115,26 @@ class OutlineSettings:
     zbridges: float = -0.6
 
 
-SECTIONS = ("general", "machine", "isolation", "drill", "outline")
+@dataclass
+class MaskSettings:
+    """Milling the solder mask openings (F.Mask/B.Mask) free.
+
+    pcb2gcode runs a second time with invert-gerbers, which mills inside the
+    drawn shapes - for a mask layer those are exactly the openings over pads.
+    """
+
+    enabled: bool = True
+    mill_diameters: str = "0.1"
+    offset: float = 0.0
+    zwork: float = -0.03  # just through the mask, not into the copper
+    mill_feed: float = 1200.0
+    mill_vertfeed: float = 600.0
+    mill_speed: float = 24000.0
+    isolation_width: float = 2.0  # cleared inward from the opening's edge
+    milling_overlap: str = "50%"
+
+
+SECTIONS = ("general", "machine", "isolation", "drill", "outline", "mask")
 
 
 @dataclass
@@ -126,6 +145,7 @@ class Settings:
     isolation: IsolationSettings = field(default_factory=IsolationSettings)
     drill: DrillSettings = field(default_factory=DrillSettings)
     outline: OutlineSettings = field(default_factory=OutlineSettings)
+    mask: MaskSettings = field(default_factory=MaskSettings)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -172,6 +192,8 @@ class Settings:
         g.basename = g.basename.strip()
         i.mill_diameters = i.mill_diameters.strip()
         i.milling_overlap = i.milling_overlap.strip()
+        self.mask.mill_diameters = self.mask.mill_diameters.strip()
+        self.mask.milling_overlap = self.mask.milling_overlap.strip()
 
 
 def _coerce(value: Any, current: Any) -> Any:

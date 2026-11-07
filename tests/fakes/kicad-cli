@@ -30,8 +30,14 @@ GERBERS = {
     "B.Cu": "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.25*%\n%ADD11C,1.7*%\nD10*\nX0Y0D02*\nX2540000Y0D01*\nD11*\nX0Y0D03*\nM02*\n",
     "Edge.Cuts": "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.1*%\nD10*\nX0Y0D02*\nX10000000Y0D01*\nX10000000Y10000000D01*\nX0Y0D01*\nM02*\n",
 }
+# solder mask openings over the pads (KiCad plots them as positive shapes)
+OPENINGS = "%FSLAX46Y46*%\n%MOMM*%\n%ADD11C,1.9*%\nD11*\nX0Y0D03*\nX2540000Y0D03*\nM02*\n"
+GERBERS["F.Mask"] = OPENINGS
+GERBERS["B.Mask"] = OPENINGS
 with open(board) as fh:
     BOARD_TEXT = fh.read()
+if "NO_MASK_OPENINGS" in BOARD_TEXT:
+    GERBERS["F.Mask"] = GERBERS["B.Mask"] = "%FSLAX46Y46*%\n%MOMM*%\nM02*\n"
 INNER = (GERBERS["B.Cu"] if "INNER_TRACES" in BOARD_TEXT
          else "%FSLAX46Y46*%\n%MOMM*%\n%ADD11C,1.7*%\nD11*\nX0Y0D03*\nM02*\n")
 for n in range(1, 31):

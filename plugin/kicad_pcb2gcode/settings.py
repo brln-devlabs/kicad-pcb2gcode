@@ -30,6 +30,7 @@ CONFIG_FILE_NAME = "config.json"
 SIDES = ("auto", "front", "back", "both")
 SIDE_CHOICES = ("auto", "front", "back")
 FEED_DIRECTIONS = ("any", "climb", "conventional")
+FLIP_AXES = ("leftright", "topbottom")
 
 
 @dataclass
@@ -42,7 +43,14 @@ class GeneralSettings:
     use_aux_origin: bool = False  # KiCad drill/place file origin instead of absolute
     include_unsaved: bool = True  # export a copy of the open board, unsaved edits included
     outer_layers_only: bool = False  # mill F.Cu/B.Cu even if inner layers carry copper
-    zero_start: bool = True
+    zero_start: bool = True  # lower-left corner of the board outline at X0/Y0
+    # Double-sided boards: the board is turned over about its own centre line,
+    # left/right (around the vertical axis) or top/bottom.
+    flip_axis: str = "leftright"
+    # Flip frame: a pocket of exactly the outline size is fixed on the machine
+    # and the pre-cut blank is turned over inside it. The outline is not cut,
+    # holes are drilled from the top before turning.
+    frame_mode: bool = False
     zsafe: float = 2.0
     zchange: float = 20.0
     open_folder_after: bool = False
@@ -146,6 +154,8 @@ class Settings:
 
     def sanitize(self) -> None:
         g, i, d, o = self.general, self.isolation, self.drill, self.outline
+        if g.flip_axis not in FLIP_AXES:
+            g.flip_axis = "leftright"
         if g.sides not in SIDES:
             g.sides = "auto"
         if i.mill_feed_direction not in FEED_DIRECTIONS:

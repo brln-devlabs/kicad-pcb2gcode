@@ -1,3 +1,5 @@
+import pytest
+
 from kicad_pcb2gcode.gerber import LayerStats, choose_sides, drill_hits, layer_stats
 
 TRACES = """%TF.GenerationSoftware,KiCad,Pcbnew,9.0.0*%
@@ -85,3 +87,55 @@ def test_choose_sides():
     assert choose_sides(pads, pads) == "back"  # THT pads only: classic bottom-side board
     assert choose_sides(pads, empty) == "front"
     assert choose_sides(empty, empty) == "back"
+
+
+def _mm(v):
+    return str(int(round(v * 1e6)))
+
+
+def rounded_rect(x0, y0, x1, y1, r):
+    lines = ["%TF.FileFunction,Profile,NP*%", "%FSLAX46Y46*%", "G04 Gerber Fmt 4.6*", "%MOMM*%",
+             "%LPD*%", "G01*", "%ADD10C,0.100000*%", "D10*", "G75*",
+             "X{}Y{}D02*".format(_mm(x0 + r), _mm(y0)), "X{}Y{}D01*".format(_mm(x1 - r), _mm(y0)),
+             "G03*", "X{}Y{}I0J{}D01*".format(_mm(x1), _mm(y0 + r), _mm(r)), "G01*",
+             "X{}Y{}D01*".format(_mm(x1), _mm(y1 - r)),
+             "G03*", "X{}Y{}I{}J0D01*".format(_mm(x1 - r), _mm(y1), _mm(-r)), "G01*",
+             "X{}Y{}D01*".format(_mm(x0 + r), _mm(y1)),
+             "G03*", "X{}Y{}I0J{}D01*".format(_mm(x0), _mm(y1 - r), _mm(-r)), "G01*",
+             "X{}Y{}D01*".format(_mm(x0), _mm(y0 + r)),
+             "G03*", "X{}Y{}I{}J0D01*".format(_mm(x0 + r), _mm(y0), _mm(r)), "G01*", "M02*"]
+    return "\n".join(lines) + "\n"
+
+
+def test_outline_box_rounded_rectangle(tmp_path):
+    from kicad_pcb2gcode.gerber import outline_box
+
+    box = outline_box(write(tmp_path, "o.gbr", rounded_rect(100, -80, 140, -50, 2)))
+    assert (box.min_x, box.min_y, box.max_x, box.max_y) == (100, -80, 140, -50)
+    assert (box.width, box.height) == (40, 30)
+
+
+def test_outline_box_circle_and_bulging_arc(tmp_path):
+    from kicad_pcb2gcode.gerber import outline_box
+
+    circle = "%FSLAX46Y46*%\n%MOMM*%\nG75*\nX10000000Y0D02*\nG02*\nX10000000Y0I-10000000J0D01*\nM02*\n"
+    box = outline_box(write(tmp_path, "c.gbr", circle))
+    assert (box.min_x, box.min_y, box.max_x, box.max_y) == pytest.approx((-10, -10, 10, 10))
+    # quarter arc from (10,0) counter-clockwise to (0,10) bulges to x=10,y=10 only
+    quarter = "%FSLAX46Y46*%\n%MOMM*%\nG75*\nX10000000Y0D02*\nG03*\nX0Y10000000I-10000000J0D01*\nM02*\n"
+    box = outline_box(write(tmp_path, "q.gbr", quarter))
+    assert (box.min_x, box.min_y, box.max_x, box.max_y) == pytest.approx((0, 0, 10, 10))
+    # the same arc clockwise goes the long way round
+    long_way = quarter.replace("G03", "G02")
+    box = outline_box(write(tmp_path, "l.gbr", long_way))
+    assert (box.min_x, box.min_y, box.max_x, box.max_y) == pytest.approx((-10, -10, 10, 10))
+
+
+def test_outline_box_inch_and_empty(tmp_path):
+    from kicad_pcb2gcode.gerber import outline_box
+
+    inch = "%FSLAX25Y25*%\n%MOIN*%\nX0Y0D02*\nX100000Y50000D01*\nM02*\n"
+    box = outline_box(write(tmp_path, "i.gbr", inch))
+    assert (box.width, box.height) == pytest.approx((25.4, 12.7))
+    assert outline_box(write(tmp_path, "e.gbr", PADS_ONLY.replace("D03", "D02"))) is None
+    assert outline_box(str(tmp_path / "missing.gbr")) is None

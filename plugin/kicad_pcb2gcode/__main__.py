@@ -26,6 +26,9 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--sides", choices=SIDES, help="copper sides to mill (default: from settings, usually auto)")
     p.add_argument("--no-drill", action="store_true", help="skip drilling")
     p.add_argument("--no-outline", action="store_true", help="skip the board outline")
+    p.add_argument("--frame", action="store_true",
+                   help="flip frame: no outline cut, drill from the top, corner at X0/Y0")
+    p.add_argument("--flip", choices=("leftright", "topbottom"), help="axis the board is turned over about")
     p.add_argument("--outer-layers-only", action="store_true",
                    help="mill F.Cu/B.Cu even if inner copper layers carry copper")
     p.add_argument("--output", metavar="DIR", help="output folder (absolute, or relative to the board)")
@@ -47,6 +50,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         general["export_drill"] = False
     if args.no_outline:
         general["export_outline"] = False
+    if args.frame:
+        general["frame_mode"] = True
+    if args.flip:
+        general["flip_axis"] = args.flip
     if args.outer_layers_only:
         general["outer_layers_only"] = True
     if args.output:

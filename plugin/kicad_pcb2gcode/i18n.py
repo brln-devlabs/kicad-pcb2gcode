@@ -62,6 +62,8 @@ PROBLEMS = {
                       "Nichts zu tun: keine Kupfer-, Bohr- oder Konturdaten gewählt oder gefunden."),
     "zsafe_positive": ("Safe height must be above zero.", "Sicherheitshöhe muss über null liegen."),
     "zchange_positive": ("Tool change height must be above zero.", "Werkzeugwechselhöhe muss über null liegen."),
+    "frame_needs_outline": ("The flip frame mode needs a board outline on Edge.Cuts.",
+                            "Der Wenderahmen-Modus braucht eine Platinenkontur auf Edge.Cuts."),
     "zwork_negative": ("Milling depth must be below zero (e.g. -0.08).",
                        "Frästiefe muss unter null liegen (z. B. -0,08)."),
     "mill_diameters_invalid": ("Mill diameters: one or more positive numbers separated by commas, e.g. 0.15.",

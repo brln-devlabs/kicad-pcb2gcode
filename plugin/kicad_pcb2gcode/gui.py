@@ -73,11 +73,28 @@ PAGES: List[Tuple[Tuple[str, str], List[Row]]] = [
         Field("general", "open_folder_after", ("Open folder when done", "Ordner danach öffnen"), "bool"),
         Heading(("Coordinates and heights", "Koordinaten und Höhen")),
         Field("general", "zero_start", ("Board corner at X0/Y0", "Platinenecke auf X0/Y0"), "bool",
-              tip=("Moves the lower-left corner of the board to the origin.",
-                   "Verschiebt die linke untere Platinenecke in den Nullpunkt.")),
+              tip=("Puts the lower-left corner of the board outline exactly on the origin. "
+                   "The bottom side is mirrored about the board's centre line, so it uses the same area.",
+                   "Legt die linke untere Ecke der Platinenkontur genau auf den Nullpunkt. Die Unterseite "
+                   "wird um die Platinenmitte gespiegelt und liegt im selben Bereich.")),
         Field("general", "use_aux_origin", ("Use drill/place file origin", "Bohr-/Platzierungsursprung verwenden"), "bool"),
         Field("general", "zsafe", ("Safe height", "Sicherheitshöhe"), "float", "mm"),
         Field("general", "zchange", ("Tool change height", "Werkzeugwechselhöhe"), "float", "mm"),
+    ]),
+    (("Double-sided", "Doppelseitig"), [
+        Heading(("Turning the board over", "Platine wenden")),
+        Field("general", "flip_axis", ("Turn the board", "Platine wenden"), "choice", choices=(
+            ("leftright", ("Left/right (about the vertical centre line)", "Links/rechts (um die senkrechte Mittelachse)")),
+            ("topbottom", ("Top/bottom (about the horizontal centre line)", "Oben/unten (um die waagerechte Mittelachse)")),
+        )),
+        Heading(("Flip frame", "Wenderahmen")),
+        Field("general", "frame_mode", ("Mill in a flip frame", "Im Wenderahmen fräsen"), "bool",
+              tip=("A frame with exactly the size of the board outline is fixed on the machine, its lower-left "
+                   "corner is X0/Y0. The pre-cut blank is milled on top, drilled, turned over inside the frame "
+                   "and milled on the bottom. The outline is not cut.",
+                   "Ein Rahmen genau in der Größe der Platinenkontur ist auf der Maschine befestigt, seine linke "
+                   "untere Ecke ist X0/Y0. Der zugeschnittene Rohling wird oben gefräst, gebohrt, im Rahmen "
+                   "gewendet und unten gefräst. Die Kontur wird nicht gefräst.")),
     ]),
     (("Isolation", "Isolation"), [
         Heading(("Tool", "Werkzeug")),
@@ -344,6 +361,10 @@ class Pcb2GcodeDialog(wx.Dialog):
             event.Skip()
         voronoi = self.controls[("isolation", "voronoi")][1].GetValue()
         self.controls[("isolation", "preserve_thermal_reliefs")][1].Enable(bool(voronoi))
+        # The flip frame fixes these: corner at X0/Y0, no outline cut, drilling from the top.
+        frame = bool(self.controls[("general", "frame_mode")][1].GetValue())
+        for key in (("general", "zero_start"), ("general", "export_outline"), ("drill", "drill_side")):
+            self.controls[key][1].Enable(not frame)
 
     # -- actions ----------------------------------------------------------
 

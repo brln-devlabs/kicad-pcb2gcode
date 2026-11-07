@@ -89,11 +89,37 @@ The defaults switch off what GRBL does not understand: `G64` (path blending),
 `G81` (drilling cycle), `G91.1` and `M6` (tool change). With grblHAL and a
 tool changer you can turn `M6` back on in the **Machine** tab.
 
-### Double-sided boards
+### Origin and double-sided boards
 
-With **Both sides** pcb2gcode mirrors the bottom layer. Alignment between the
-two sides depends on your fixture; drill alignment holes and verify on scrap
-before milling a real board.
+With **Board corner at X0/Y0** (default) the lower-left corner of the board
+outline (`Edge.Cuts`, line centres) is exactly X0/Y0 in every file. The
+bottom side is mirrored about the board's own centre line – left/right or
+top/bottom, tab **Double-sided** – so it covers the same rectangle as the
+top. pcb2gcode's built-in `zero-start` is not used for this: it adds a margin
+of one cutter diameter and mirrors the bottom into negative X.
+
+#### Flip frame
+
+For double-sided boards without alignment pins: fix a frame (or mill a
+pocket) with exactly the size of the board outline on the machine and set
+X0/Y0 to its lower-left corner. Cut the blank to the same size. With
+**Mill in a flip frame** the plugin
+
+* does not cut the outline (the blank already has its final size),
+* drills all holes from the top, before turning over,
+* writes the order of work to the log and to `gcode/STEPS.txt`
+  (`ABLAUF.txt` in German):
+
+```
+1. board_front.ngc   top side
+2. board_drill.ngc   drill
+3. turn the board over left/right in the frame – keep the origin
+4. board_back.ngc    bottom side
+```
+
+For non-rectangular boards the frame has the size of the outline's bounding
+rectangle. The alignment follows pcb2gcode's coordinate formulas, which
+`tests/test_placement.py` reproduces; still verify on a scrap piece first.
 
 ### Boards with more than two copper layers
 

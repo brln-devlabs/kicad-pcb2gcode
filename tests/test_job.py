@@ -223,3 +223,32 @@ def test_unsaved_changes_can_be_switched_off(board):
     ctx = BoardContext(board_path=board, session=session)
     assert ctx.board_to_export(s, lambda line: None) == board
     assert session.targets == []
+
+
+def test_flip_frame(board):
+    s = Settings()
+    s.general.frame_mode = True
+    s.general.sides = "both"
+    log = []
+    result = run_job(request(board, s), log.append)
+    names = sorted(os.path.basename(f) for f in result.files)
+    assert names == ["my_board_back.ngc", "my_board_drill.ngc", "my_board_front.ngc"]  # no outline
+    millproject = open(result.millproject_path).read()
+    assert "outline=" not in millproject
+    assert "drill-side=front" in millproject
+    assert "x-offset=0" in millproject and "mirror-axis=5" in millproject  # fake outline 10 x 10 mm
+    steps = open(os.path.join(result.output_dir, "STEPS.txt")).read().splitlines()
+    order = [line.split(".", 1)[1].strip() for line in steps if line.strip()[:2].rstrip(".").isdigit()]
+    assert order[0].startswith("my_board_front.ngc")
+    assert order[1].startswith("my_board_drill.ngc")
+    assert order[2].startswith("Turn the board over left/right")
+    assert order[3].startswith("my_board_back.ngc")
+    assert any("Board outline: 10.000 x 10.000 mm" in line for line in log)
+
+
+def test_outline_defines_origin_even_when_not_cut(board):
+    s = Settings()
+    s.general.export_outline = False
+    result = run_job(request(board, s), lambda line: None)
+    millproject = open(result.millproject_path).read()
+    assert "x-offset=" in millproject and "outline=" not in millproject

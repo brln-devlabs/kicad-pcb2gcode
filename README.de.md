@@ -94,11 +94,38 @@ Die Voreinstellungen schalten ab, was GRBL nicht kennt: `G64`
 (Werkzeugwechsel). Mit grblHAL und Werkzeugwechsler lässt sich `M6` im Reiter
 **Maschine** wieder einschalten.
 
-### Doppelseitige Platinen
+### Nullpunkt und doppelseitige Platinen
 
-Bei **Beide Seiten** spiegelt pcb2gcode die Unterseite. Wie genau beide Seiten
-zueinander passen, hängt von deiner Aufspannung ab. Bohre Passlöcher und teste
-an einem Reststück, bevor du eine echte Platine fräst.
+Mit **Platinenecke auf X0/Y0** (Voreinstellung) liegt die linke untere Ecke
+der Platinenkontur (`Edge.Cuts`, Linienmitte) in jeder Datei genau auf X0/Y0.
+Die Unterseite wird um die Mittelachse der Platine gespiegelt – links/rechts
+oder oben/unten, Reiter **Doppelseitig** – und liegt damit im selben Rechteck
+wie die Oberseite. pcb2gcodes eingebautes `zero-start` wird dafür nicht
+verwendet: Es lässt einen Rand von einem Fräserdurchmesser und spiegelt die
+Unterseite in den negativen X-Bereich.
+
+#### Wenderahmen
+
+Für doppelseitige Platinen ohne Passstifte: Einen Rahmen (oder eine
+ausgefräste Tasche) genau in der Größe der Platinenkontur auf der Maschine
+befestigen und X0/Y0 auf seine linke untere Ecke setzen. Den Rohling auf
+dieselbe Größe zuschneiden. Mit **Im Wenderahmen fräsen**
+
+* wird die Kontur nicht gefräst (der Rohling hat schon seine Endgröße),
+* werden alle Löcher von oben gebohrt, vor dem Wenden,
+* steht der Ablauf im Protokoll und in `gcode/ABLAUF.txt`:
+
+```
+1. board_front.ngc   Oberseite
+2. board_drill.ngc   Bohren
+3. Platine im Rahmen links/rechts wenden – Nullpunkt bleibt
+4. board_back.ngc    Unterseite
+```
+
+Bei nicht rechteckigen Platinen hat der Rahmen die Größe des umschließenden
+Rechtecks der Kontur. Die Ausrichtung folgt pcb2gcodes Koordinatenformeln, die
+`tests/test_placement.py` nachbildet; trotzdem zuerst an einem Reststück
+prüfen.
 
 ### Boards mit mehr als zwei Kupferlagen
 

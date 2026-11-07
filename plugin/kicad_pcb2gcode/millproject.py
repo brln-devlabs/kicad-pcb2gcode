@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from . import __version__
+from .gerber import Box
 from .settings import Settings
 from .tools import fmt, parse_diameter_list, parse_overlap
 
@@ -24,6 +25,11 @@ class Inputs:
     back: Optional[str] = None
     drill: Optional[str] = None
     outline: Optional[str] = None
+    # Rectangle of the board outline (Edge.Cuts line centres) in Gerber
+    # coordinates. When known, the origin and the flip axis are placed on it
+    # exactly instead of relying on pcb2gcode's zero-start, which adds a
+    # margin of one cutter diameter and mirrors the bottom into negative X.
+    board_box: Optional[Box] = None
 
     @property
     def mills(self) -> bool:
@@ -52,6 +58,8 @@ def validate(settings: Settings, inputs: Inputs) -> List[str]:
         problems.append("zsafe_positive")
     if g.zchange <= 0:
         problems.append("zchange_positive")
+    if g.frame_mode and inputs.board_box is None:
+        problems.append("frame_needs_outline")
     if inputs.mills:
         if iso.zwork >= 0:
             problems.append("zwork_negative")
@@ -100,6 +108,33 @@ def validate(settings: Settings, inputs: Inputs) -> List[str]:
     return unique
 
 
+def placement_options(settings: Settings, box: Optional[Box]) -> List[Tuple[str, object]]:
+    """Origin and mirror options.
+
+    With the outline rectangle known and "board corner at X0/Y0" on, the
+    G-code of every side covers exactly [0, width] x [0, height]:
+
+    * x-offset/y-offset are added to every top-side coordinate; set to
+      ``-min`` they move the outline's lower-left corner to the origin;
+    * the bottom side comes out as ``2 * mirror_axis - x - x_offset``; with
+      the axis at half the width that is ``max_x - x`` - the board turned over
+      about its own centre line, its corner staying at the origin.
+    (See ngc_exporter.cpp and drill.cpp in pcb2gcode; tests/test_placement.py
+    re-implements those formulas to check the alignment.)
+    """
+    g = settings.general
+    if not (g.zero_start or g.frame_mode):  # the flip frame needs the corner at X0/Y0
+        return []
+    if box is None:
+        return [("zero-start", True)]
+    opts: List[Tuple[str, object]] = [("x-offset", -box.min_x), ("y-offset", -box.min_y)]
+    if g.flip_axis == "topbottom":
+        opts += [("mirror-yaxis", True), ("mirror-axis", box.height / 2)]
+    else:
+        opts.append(("mirror-axis", box.width / 2))
+    return opts
+
+
 def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tuple[str, str]]:
     """Ordered (option, value) pairs for pcb2gcode."""
     g, m, iso, d, o = (
@@ -123,8 +158,8 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
     add("zchange", g.zchange)
     # Switches pcb2gcode defaults to false are only written when set, so a
     # switched-off option never trips an older pcb2gcode that lacks it.
-    if g.zero_start:
-        add("zero-start", True)
+    for key, value in placement_options(settings, inputs.board_box):
+        add(key, value)
     for key, enabled in (("nog64", m.nog64), ("nog81", m.nog81), ("nog91-1", m.nog91_1), ("nom6", m.nom6)):
         if enabled:
             add(key, True)
@@ -158,8 +193,10 @@ def build_options(settings: Settings, inputs: Inputs, basename: str) -> List[Tup
         add("zdrill", d.zdrill)
         add("drill-feed", d.drill_feed)
         add("drill-speed", d.drill_speed)
-        if d.drill_side != "auto":
-            add("drill-side", d.drill_side)
+        # In the flip frame all holes are drilled from the top, before turning over.
+        drill_side = "front" if g.frame_mode else d.drill_side
+        if drill_side != "auto":
+            add("drill-side", drill_side)
         sizes = parse_diameter_list(d.drills_available)
         if sizes:
             add("drills-available", ",".join(fmt(s) for s in sizes))

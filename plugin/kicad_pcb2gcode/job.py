@@ -239,15 +239,30 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str]":
     if chosen in ("back", "both"):
         inputs.back = _rel(copper["back"], out)
 
-    if s.general.export_outline:
+    g = s.general
+    if g.export_outline or g.zero_start or g.frame_mode:
+        # Also needed when the outline is not cut: its rectangle defines the
+        # origin and the flip axis.
         target = os.path.join(cam_dir, "outline.gbr")
         log(tr("Exporting {} ...", "Exportiere {} ...").format(OUTLINE_LAYER))
         export_layer(req, OUTLINE_LAYER, target, log)
-        if gerber.layer_stats(target).draws:
-            inputs.outline = _rel(target, out)
-        else:
-            log(tr("No board outline on Edge.Cuts - skipping outline.",
-                   "Keine Platinenkontur auf Edge.Cuts - Kontur wird übersprungen."))
+        inputs.board_box = gerber.outline_box(target)
+        box = inputs.board_box
+        if box is not None:
+            log(tr("Board outline: {:.3f} x {:.3f} mm", "Platinenkontur: {:.3f} x {:.3f} mm").format(box.width, box.height))
+        if g.frame_mode:
+            log(tr("Flip frame: the outline is not cut.", "Wenderahmen: Die Kontur wird nicht gefräst."))
+        elif g.export_outline:
+            if box is not None and gerber.layer_stats(target).draws:
+                inputs.outline = _rel(target, out)
+            else:
+                log(tr("No board outline on Edge.Cuts - skipping outline.",
+                       "Keine Platinenkontur auf Edge.Cuts - Kontur wird übersprungen."))
+        if box is None and g.zero_start and not g.frame_mode:
+            log(tr("No board outline: pcb2gcode places the origin itself (with a margin), "
+                   "a bottom side is mirrored into negative X.",
+                   "Keine Platinenkontur: pcb2gcode legt den Nullpunkt selbst fest (mit Rand), "
+                   "eine Unterseite wird in den negativen X-Bereich gespiegelt."))
 
     if s.general.export_drill:
         log(tr("Exporting drill file ...", "Exportiere Bohrdatei ..."))
@@ -260,9 +275,44 @@ def prepare_inputs(req: JobRequest, log: Log) -> "tuple[Inputs, str]":
     return inputs, chosen
 
 
+def frame_steps(files: List[str], inputs: Inputs, flip_axis: str) -> List[str]:
+    """Operator instructions for the flip frame, in machining order."""
+    by_job = {}
+    for path in files:
+        stem = os.path.basename(path)[:-4]
+        by_job[stem.rsplit("_", 1)[-1]] = os.path.basename(path)
+    box = inputs.board_box
+    size = "{:.2f} x {:.2f} mm".format(box.width, box.height) if box else "?"
+    flip = (tr("left/right (about the vertical centre line)", "links/rechts (um die senkrechte Mittelachse)")
+            if flip_axis == "leftright" else
+            tr("top/bottom (about the horizontal centre line)", "oben/unten (um die waagerechte Mittelachse)"))
+    lines = [
+        tr("Flip frame - order of work:", "Wenderahmen - Ablauf:"),
+        tr("  Blank {} in the frame, origin X0/Y0 = lower-left corner of the frame.",
+           "  Rohling {} in den Rahmen, Nullpunkt X0/Y0 = linke untere Rahmenecke.").format(size),
+    ]
+    first = [j for j in ("front", "drill", "milldrill") if j in by_job]
+    n = 1
+    for job in first:
+        label = {"front": tr("top side", "Oberseite"), "drill": tr("drill", "bohren"),
+                 "milldrill": tr("mill holes", "Löcher fräsen")}[job]
+        lines.append("  {}. {}  ({})".format(n, by_job[job], label))
+        n += 1
+    if "back" in by_job:
+        lines.append("  {}. {}".format(n, tr("Turn the board over {} - keep the origin.",
+                                            "Platine {} wenden - Nullpunkt bleibt.").format(flip)))
+        n += 1
+        lines.append("  {}. {}  ({})".format(n, by_job["back"], tr("bottom side", "Unterseite")))
+    return lines
+
+
 def clean_outputs(output_dir: str) -> None:
     """Remove G-code from earlier runs so stale files cannot be mistaken for new ones."""
-    for path in glob.glob(os.path.join(output_dir, "*.ngc")):
+    stale = glob.glob(os.path.join(output_dir, "*.ngc"))
+    stale += [os.path.join(output_dir, name) for name in ("STEPS.txt", "ABLAUF.txt")]
+    for path in stale:
+        if not os.path.isfile(path):
+            continue
         try:
             os.remove(path)
         except OSError:
@@ -316,4 +366,14 @@ def run_job(req: JobRequest, log: Log = print) -> JobResult:
     log(tr("Done. G-code files:", "Fertig. G-Code-Dateien:"))
     for path in files:
         log("  " + os.path.basename(path))
+    if req.settings.general.frame_mode:
+        steps = frame_steps(files, inputs, req.settings.general.flip_axis)
+        log("")
+        for line in steps:
+            log(line)
+        try:
+            with open(os.path.join(req.output_dir, tr("STEPS.txt", "ABLAUF.txt")), "w", encoding="utf-8") as fh:
+                fh.write("\n".join(steps) + "\n")
+        except OSError:
+            pass
     return JobResult(output_dir=req.output_dir, sides=sides, inputs=inputs, files=files, millproject_path=millproject_path)

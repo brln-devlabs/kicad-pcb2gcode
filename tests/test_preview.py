@@ -49,3 +49,38 @@ def test_npth_label_and_clear(tmp_path):
     touch(os.path.join(out, "stray.svg"))
     clear(out)
     assert list_previews(out) == [] and not os.path.exists(os.path.join(out, "stray.svg"))
+
+
+def test_fit_view_centres_the_image():
+    from kicad_pcb2gcode.preview import fit_view
+
+    ox, oy, s = fit_view(200, 100, 416, 416)
+    assert s == 2.0 and (ox, oy) == (8.0, 108.0)
+    assert fit_view(0, 10, 100, 100) == (0.0, 0.0, 1.0)
+
+
+def test_zoom_keeps_the_point_under_the_cursor():
+    import pytest
+    from kicad_pcb2gcode.preview import zoom_at
+
+    ox, oy, s = 10.0, 20.0, 2.0
+    px, py = 110.0, 70.0
+    image_point = ((px - ox) / s, (py - oy) / s)
+    nox, noy, ns = zoom_at(ox, oy, s, px, py, 1.25, fit_scale=2.0)
+    assert ns == 2.5
+    assert ((px - nox) / ns, (py - noy) / ns) == pytest.approx(image_point)
+
+
+def test_zoom_limits():
+    from kicad_pcb2gcode.preview import MAX_ZOOM, MIN_ZOOM, zoom_at
+
+    assert zoom_at(0, 0, 1.0, 0, 0, 1000, fit_scale=1.0)[2] == MAX_ZOOM
+    assert zoom_at(0, 0, 1.0, 0, 0, 0.001, fit_scale=1.0)[2] == MIN_ZOOM
+
+
+def test_wheel_factor():
+    from kicad_pcb2gcode.preview import wheel_factor
+
+    assert wheel_factor(120, 120) == 1.25
+    assert wheel_factor(-240, 120) == 1 / 1.25 ** 2
+    assert 1 < wheel_factor(30, 120) < 1.25  # touchpad: part of a notch

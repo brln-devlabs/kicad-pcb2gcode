@@ -148,7 +148,7 @@ def window_html(index: int, settings: Settings, log_lines, origin_hint: bool = F
         '<div class="win" id="win"><div class="title">pcb2gcode – sensor-board<span class="close">✕</span></div>'
         '<div class="path">{path}</div>{hint}<div class="body"><div class="nb"><div class="tabs">{tabs}</div>{page}</div>'
         '<div class="pv"><div class="t">{pv_title}</div><div class="row"><div class="combo off"></div>'
-        '<div class="browse off">\u2197</div></div><div class="canvas">{pv_msg}</div></div></div>'
+        '<div class="browse off">\u2922</div><div class="browse off">\u2197</div></div><div class="canvas">{pv_msg}</div></div></div>'
         '<div class="log" style="height:{log_h}px">{log}</div><div class="buttons">{buttons}</div></div></body></html>'
     ).format(css=CSS, path=esc(BOARD), tabs=tabs,
              pv_title=esc(tr("Preview", "Vorschau")),

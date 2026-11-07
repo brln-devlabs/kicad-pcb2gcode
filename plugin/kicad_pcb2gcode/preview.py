@@ -110,3 +110,32 @@ def list_previews(output_dir: str) -> List[Tuple[str, str]]:
             entries.append((sort_key, label, path))
     entries.sort()
     return [(label, path) for _, label, path in entries]
+
+
+# -- view geometry (zoom and pan), kept free of wx so it can be tested ---------
+
+MIN_ZOOM = 0.5  # relative to "fit to window"
+MAX_ZOOM = 60.0
+
+
+def fit_view(image_w: float, image_h: float, view_w: float, view_h: float, margin: float = 8.0):
+    """(origin_x, origin_y, scale) that shows the whole image centred."""
+    if image_w <= 0 or image_h <= 0 or view_w <= 2 * margin or view_h <= 2 * margin:
+        return 0.0, 0.0, 1.0
+    scale = min((view_w - 2 * margin) / image_w, (view_h - 2 * margin) / image_h)
+    return (view_w - image_w * scale) / 2.0, (view_h - image_h * scale) / 2.0, scale
+
+
+def zoom_at(origin_x: float, origin_y: float, scale: float, point_x: float, point_y: float,
+            factor: float, fit_scale: float):
+    """Zoom by ``factor`` keeping the image point under (point_x, point_y) in
+    place; the zoom stays between MIN_ZOOM and MAX_ZOOM times ``fit_scale``."""
+    new_scale = min(max(scale * factor, fit_scale * MIN_ZOOM), fit_scale * MAX_ZOOM)
+    ratio = new_scale / scale
+    return point_x - (point_x - origin_x) * ratio, point_y - (point_y - origin_y) * ratio, new_scale
+
+
+def wheel_factor(rotation: int, delta: int) -> float:
+    """1.25 per notch of the mouse wheel; touchpads send fractions of a notch."""
+    steps = rotation / float(delta or 120)
+    return 1.25 ** steps

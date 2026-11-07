@@ -28,7 +28,7 @@ from .app import BoardContext, drill_origin_tip, generate, open_folder
 from .form import PAGES, Field, Heading, Row, format_number, parse_number, label_text
 from .i18n import tr
 from .job import JobError
-from .preview import list_previews
+from .preview import fit_view, list_previews, wheel_factor, zoom_at
 from .settings import AppConfig, Settings, save_config
 
 
@@ -37,28 +37,45 @@ from .settings import AppConfig, Settings, save_config
 
 class PreviewPanel(wx.Panel):
     """Shows the SVG images pcb2gcode wrote: copper with tool paths, holes,
-    outline, solder mask and clearance problems, like pcb2gcodeGUI does."""
+    outline, solder mask and clearance problems, like pcb2gcodeGUI does.
+
+    Mouse wheel zooms around the pointer, dragging with the left or middle
+    button moves the view, a double click fits the image again. Only the
+    visible part is drawn, as vectors, so it stays sharp at any zoom.
+    """
 
     def __init__(self, parent: wx.Window):
         super().__init__(parent)
         self.entries: List[Tuple[str, str]] = []
         self._svg: Any = None
-        self._cache: Optional[Tuple[Tuple[str, int, int], wx.Bitmap]] = None
         self._path = ""
+        # view: screen position of the image's (0, 0) and pixels per image unit
+        self._origin = (0.0, 0.0)
+        self._scale = 1.0
+        self._fit_scale = 1.0
+        self._fitted = True  # follow window size until the user zooms or pans
+        self._drag: Optional[Tuple[Tuple[int, int], Tuple[float, float]]] = None
+        # last rendering: bitmap, origin and scale it was drawn with
+        self._cache: Optional[Tuple[wx.Bitmap, Tuple[float, float], float]] = None
 
         title = wx.StaticText(self, label=tr("Preview", "Vorschau"))
         font = title.GetFont()
         font.SetWeight(wx.FONTWEIGHT_BOLD)
         title.SetFont(font)
         self.choice = wx.Choice(self, choices=[])
+        self.btn_fit = wx.Button(self, label="\u2922", size=wx.Size(36, -1))
+        self.btn_fit.SetToolTip(tr("Fit to window (or double-click)", "Einpassen (oder Doppelklick)"))
         self.btn_open = wx.Button(self, label="\u2197", size=wx.Size(36, -1))
         self.btn_open.SetToolTip(tr("Open the image in the web browser", "Bild im Webbrowser öffnen"))
-        self.canvas = wx.Panel(self, style=wx.BORDER_SIMPLE)
+        self.canvas = wx.Panel(self, style=wx.BORDER_SIMPLE | wx.WANTS_CHARS)
         self.canvas.SetBackgroundStyle(wx.BG_STYLE_PAINT)
         self.canvas.SetMinSize(wx.Size(320, 240))
+        self.canvas.SetToolTip(tr("Mouse wheel: zoom - drag: move - double-click: fit",
+                                  "Mausrad: zoomen - ziehen: verschieben - Doppelklick: einpassen"))
 
         top = wx.BoxSizer(wx.HORIZONTAL)
         top.Add(self.choice, 1, wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 6)
+        top.Add(self.btn_fit, 0, wx.RIGHT, 4)
         top.Add(self.btn_open, 0)
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(title, 0, wx.BOTTOM, 6)
@@ -67,10 +84,21 @@ class PreviewPanel(wx.Panel):
         self.SetSizer(sizer)
 
         self.choice.Bind(wx.EVT_CHOICE, lambda evt: self._load())
+        self.btn_fit.Bind(wx.EVT_BUTTON, lambda evt: self.fit())
         self.btn_open.Bind(wx.EVT_BUTTON, self.on_open)
         self.canvas.Bind(wx.EVT_PAINT, self.on_paint)
         self.canvas.Bind(wx.EVT_SIZE, self.on_size)
+        self.canvas.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
+        for evt in (wx.EVT_LEFT_DOWN, wx.EVT_MIDDLE_DOWN):
+            self.canvas.Bind(evt, self.on_press)
+        for evt in (wx.EVT_LEFT_UP, wx.EVT_MIDDLE_UP):
+            self.canvas.Bind(evt, self.on_release)
+        self.canvas.Bind(wx.EVT_MOTION, self.on_motion)
+        self.canvas.Bind(wx.EVT_LEFT_DCLICK, lambda evt: self.fit())
+        self.canvas.Bind(wx.EVT_MOUSE_CAPTURE_LOST, lambda evt: self._end_drag())
         self.show([])
+
+    # -- content ----------------------------------------------------------
 
     def show(self, entries: List[Tuple[str, str]]) -> None:
         """Replace the list of images; keeps the selected layer if it is still there."""
@@ -82,21 +110,23 @@ class PreviewPanel(wx.Panel):
         labels = [label for label, _ in entries]
         if entries:
             self.choice.SetSelection(labels.index(previous) if previous in labels else 0)
-        self.choice.Enable(bool(entries))
-        self.btn_open.Enable(bool(entries))
+        for ctrl in (self.choice, self.btn_open, self.btn_fit):
+            ctrl.Enable(bool(entries))
         self._load()
 
     def _load(self) -> None:
         index = self.choice.GetSelection()
         self._path = self.entries[index][1] if self.entries and index >= 0 else ""
         self._svg = None
-        self._cache = None
         if self._path and HAVE_SVG:
             try:
                 self._svg = wx.svg.SVGimage.CreateFromFile(self._path)
             except Exception:
                 self._svg = None
-        self.canvas.Refresh()
+        self.fit()
+
+    def _has_image(self) -> bool:
+        return self._svg is not None and self._svg.width > 0 and self._svg.height > 0
 
     def _message(self) -> str:
         if not self.entries:
@@ -107,27 +137,112 @@ class PreviewPanel(wx.Panel):
                       "Die Vorschau braucht wxPython 4.1 oder neuer.\nBild mit \u2197 öffnen.")
         return tr("This image cannot be shown.", "Dieses Bild lässt sich nicht anzeigen.")
 
-    def on_size(self, event: wx.SizeEvent) -> None:
+    # -- view -------------------------------------------------------------
+
+    def fit(self) -> None:
+        width, height = self.canvas.GetClientSize()
+        if self._has_image():
+            ox, oy, scale = fit_view(self._svg.width, self._svg.height, width, height)
+        else:
+            ox, oy, scale = 0.0, 0.0, 1.0
+        self._origin, self._scale, self._fit_scale = (ox, oy), scale, scale
+        self._fitted = True
+        self._cache = None
         self.canvas.Refresh()
+
+    def on_size(self, event: wx.SizeEvent) -> None:
         event.Skip()
+        if self._fitted:
+            self.fit()
+        else:
+            self._cache = None
+            self.canvas.Refresh()
+
+    def on_wheel(self, event: wx.MouseEvent) -> None:
+        if not self._has_image():
+            return
+        factor = wheel_factor(event.GetWheelRotation(), event.GetWheelDelta())
+        x, y = event.GetPosition()
+        ox, oy, scale = zoom_at(self._origin[0], self._origin[1], self._scale, x, y, factor, self._fit_scale)
+        self._origin, self._scale = (ox, oy), scale
+        self._fitted = False
+        self._cache = None
+        self.canvas.Refresh()
+
+    def on_press(self, event: wx.MouseEvent) -> None:
+        if not self._has_image():
+            return
+        self._drag = (tuple(event.GetPosition()), self._origin)
+        self.canvas.SetCursor(wx.Cursor(wx.CURSOR_SIZING))
+        if not self.canvas.HasCapture():
+            self.canvas.CaptureMouse()
+
+    def on_motion(self, event: wx.MouseEvent) -> None:
+        if self._drag is None or not event.Dragging():
+            return
+        (sx, sy), (ox, oy) = self._drag
+        x, y = event.GetPosition()
+        self._origin = (ox + x - sx, oy + y - sy)
+        self._fitted = False
+        self.canvas.Refresh()  # shifts the last rendering; redrawn sharp on release
+
+    def on_release(self, event: wx.MouseEvent) -> None:
+        if self._drag is not None:
+            self._end_drag()
+            self._cache = None
+            self.canvas.Refresh()
+
+    def _end_drag(self) -> None:
+        self._drag = None
+        self.canvas.SetCursor(wx.NullCursor)
+        if self.canvas.HasCapture():
+            self.canvas.ReleaseMouse()
+
+    # -- drawing ----------------------------------------------------------
+
+    def _render(self, width: int, height: int) -> wx.Bitmap:
+        """Draw the visible part of the image at the current view."""
+        bitmap = wx.Bitmap(max(width, 1), max(height, 1))
+        dc = wx.MemoryDC(bitmap)
+        dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
+        dc.Clear()
+        try:
+            gc = wx.GraphicsContext.Create(dc)
+            gc.Translate(self._origin[0], self._origin[1])
+            gc.Scale(self._scale, self._scale)
+            self._svg.RenderToGC(gc)
+            del gc
+        except AttributeError:
+            # very old wx.svg without RenderToGC: raster the whole image, capped
+            w = int(min(self._svg.width * self._scale, 6000))
+            h = int(min(self._svg.height * self._scale, 6000))
+            if w > 0 and h > 0:
+                dc.DrawBitmap(self._svg.ConvertToScaledBitmap(wx.Size(w, h), self),
+                              int(self._origin[0]), int(self._origin[1]))
+        dc.SelectObject(wx.NullBitmap)
+        return bitmap
 
     def on_paint(self, event: wx.PaintEvent) -> None:
         dc = wx.AutoBufferedPaintDC(self.canvas)
         dc.SetBackground(wx.Brush(wx.Colour(255, 255, 255)))
         dc.Clear()
         width, height = self.canvas.GetClientSize()
-        svg = self._svg
-        if svg is not None and svg.width > 0 and svg.height > 0:
-            scale = min((width - 16) / svg.width, (height - 16) / svg.height)
-            w, h = int(svg.width * scale), int(svg.height * scale)
-            if w > 0 and h > 0:
-                key = (self._path, w, h)
-                if self._cache is None or self._cache[0] != key:
-                    self._cache = (key, svg.ConvertToScaledBitmap(wx.Size(w, h), self))
-                dc.DrawBitmap(self._cache[1], (width - w) // 2, (height - h) // 2)
-                return
-        dc.SetTextForeground(wx.Colour(120, 120, 120))
-        dc.DrawLabel(self._message(), wx.Rect(0, 0, width, height), wx.ALIGN_CENTER)
+        if not self._has_image():
+            dc.SetTextForeground(wx.Colour(120, 120, 120))
+            dc.DrawLabel(self._message(), wx.Rect(0, 0, width, height), wx.ALIGN_CENTER)
+            return
+        cache = self._cache
+        if cache is None or cache[2] != self._scale or (self._drag is None and cache[1] != self._origin) \
+                or cache[0].GetWidth() != max(width, 1) or cache[0].GetHeight() != max(height, 1):
+            cache = (self._render(width, height), self._origin, self._scale)
+            self._cache = cache
+        bitmap, (cx, cy), _ = cache
+        dc.DrawBitmap(bitmap, int(round(self._origin[0] - cx)), int(round(self._origin[1] - cy)))
+        if not self._fitted:
+            zoom = "{:.0f} %".format(100.0 * self._scale / self._fit_scale)
+            dc.SetTextForeground(wx.Colour(120, 120, 120))
+            tw, th = dc.GetTextExtent(zoom)
+            dc.DrawText(zoom, width - tw - 6, height - th - 4)
 
     def on_open(self, event: wx.Event) -> None:
         if self._path and os.path.isfile(self._path):
